@@ -54,6 +54,15 @@
 globus_result_t
 stat_object(ds3_client * Client, char * Pathname, globus_gfs_stat_t *);
 
+globus_result_t
+stat_directory_entries(ds3_client        *  Client,
+                       char              *  Path,
+                       int                  MaxEntries,
+                       globus_gfs_stat_t *  GFSStatArray,
+                       int               *  CountOut,
+                       char              ** Marker);
+
+
 void
 stat_destroy(globus_gfs_stat_t *);
 

@@ -154,12 +154,38 @@ dsi_stat(globus_gfs_operation_t   Operation,
 	if (result != GLOBUS_SUCCESS || StatInfo->file_only || !S_ISDIR(gfs_stat.mode))
 	{
 		globus_gridftp_server_finished_stat(Operation, result, &gfs_stat, 1);
-//		stat_destroy(&gfs_stat);
+		stat_destroy(&gfs_stat);
 		return;
 	}
 
-//	stat_destroy(&gfs_stat);
+	stat_destroy(&gfs_stat);
 
+#define STAT_ENTRIES_PER_REPLY 200
+	/*
+	 * Directory listing.
+	 */
+	char * marker = NULL;
+	do {
+		globus_gfs_stat_t gfs_stat_array[STAT_ENTRIES_PER_REPLY];
+		uint32_t count_out;
+
+		result = stat_directory_entries(client,
+		                                StatInfo->pathname,
+		                                STAT_ENTRIES_PER_REPLY,
+		                                gfs_stat_array,
+		                                &count_out,
+		                                &marker);
+		if (result) break;
+
+		globus_gridftp_server_finished_stat_partial(Operation,
+		                                            GLOBUS_SUCCESS,
+		                                            gfs_stat_array,
+		                                            count_out);
+
+		stat_destroy_array(gfs_stat_array, count_out);
+	} while (marker);
+
+	globus_gridftp_server_finished_stat(Operation, result, NULL, 0);
 }
 
 globus_gfs_storage_iface_t blackpearl_dsi_iface =
