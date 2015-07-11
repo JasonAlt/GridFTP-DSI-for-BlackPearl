@@ -49,7 +49,7 @@
 # our DSI.
 lib_LTLIBRARIES = libglobus_gridftp_server_blackpearl.la  
 
-SOURCES = 
+SOURCES = dsi.c
 libglobus_gridftp_server_blackpearl_la_SOURCES=$(SOURCES)
 
 CPPFLAGS=-Wall -ggdb3 $(GLOBUS_CPPFLAGS) $(DS3_CPPFLAGS)
