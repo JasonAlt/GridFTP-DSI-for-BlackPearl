@@ -39,11 +39,8 @@
  * DEALINGS WITH THE SOFTWARE.
  */
 
-/*
- * System includes
- */
-#include <stdio.h>
-#include <string.h>
+#ifndef BLACKPEARL_DSI_ERROR_H
+#define BLACKPEARL_DSI_ERROR_H
 
 /*
  * Globus includes
@@ -51,74 +48,46 @@
 #include <globus_gridftp_server.h>
 
 /*
- * Local includes
+ * DS3 includes
  */
-#include "access_id.h"
+#include <ds3.h>
+
+/*
+typedef struct {
+    uint64_t  status_code;
+    ds3_str*  status_message;
+    ds3_str*  error_body;
+}ds3_error_response;
+
+typedef struct {
+    ds3_error_code      code;
+    ds3_str*            message;
+    ds3_error_response* error;
+}ds3_error;
+
+typedef enum {
+  DS3_ERROR_INVALID_XML, DS3_ERROR_CURL_HANDLE, DS3_ERROR_REQUEST_FAILED, DS3_ERROR_MISSING_ARGS, DS3_ERROR_BAD_STATUS_CODE
+}ds3_error_code;
+*/
 
 globus_result_t
-access_id_lookup(char *  AccessIDFile,
-                 char *  Username, 
-                 char ** AccessID, 
-                 char ** SecretKey)
+error_translate(ds3_error * Error)
 {
-	FILE          * fptr   = NULL;
-	globus_result_t result = GLOBUS_SUCCESS;
-	char            buffer[1024];
+	GlobusGFSName(error_translate);
 
-	GlobusGFSName(access_id_lookup);
+	if (!Error) return GLOBUS_SUCCESS;
 
-	fptr = fopen(AccessIDFile, "r");
-	if (!fptr)
+	switch (Error->code)
 	{
-		result = GlobusGFSErrorWrapFailed("Attempting to open AccessIDFile file",
-		                                  GlobusGFSErrorSystemError("fopen()", errno));
-		goto cleanup;
+	case DS3_ERROR_BAD_STATUS_CODE:
+		return GlobusGFSErrorGeneric(ds3_str_value(Error->error->status_message));
+	case DS3_ERROR_INVALID_XML:
+	case DS3_ERROR_CURL_HANDLE:
+	case DS3_ERROR_REQUEST_FAILED:
+	case DS3_ERROR_MISSING_ARGS:
+		break;
 	}
-
-	while (fgets(buffer, sizeof(buffer), fptr) != NULL)
-	{
-		char * token = strtok(buffer, " ");
-		if (token == NULL)
-			continue;
-
-		if (*token == '#')
-			continue;
-
-		if (strcmp(token, Username) != 0)
-			continue;
-
-		token = strtok(NULL, " ");
-		if (!token)
-		{
-			result = GlobusGFSErrorGeneric("Could not get access ID for user");
-			goto cleanup;
-		}
-		*AccessID = globus_libc_strdup(token);
-
-		token = strtok(NULL, " \n");
-		if (!token)
-		{
-			result = GlobusGFSErrorGeneric("Could not get secret key for user");
-			goto cleanup;
-		}
-		*SecretKey = globus_libc_strdup(token);
-
-		goto cleanup;
-	}
-
-	result = GlobusGFSErrorGeneric("AccessID not found");
-
-cleanup:
-	if (fptr != NULL)
-		fclose(fptr);
-
-	if (result != GLOBUS_SUCCESS)
-	{
-		if (*SecretKey) globus_free(*SecretKey);
-		if (*AccessID)  globus_free(*AccessID);
-		*SecretKey = NULL;
-		*AccessID  = NULL;
-	}
-	return result;
+	return GlobusGFSErrorGeneric("An unknown DS3 error has occurred");
 }
 
+#endif /* BLACKPEARL_DSI_ERROR_H */

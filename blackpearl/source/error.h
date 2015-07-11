@@ -39,11 +39,8 @@
  * DEALINGS WITH THE SOFTWARE.
  */
 
-/*
- * System includes
- */
-#include <stdio.h>
-#include <string.h>
+#ifndef BLACKPEARL_DSI_ERROR_H
+#define BLACKPEARL_DSI_ERROR_H
 
 /*
  * Globus includes
@@ -51,74 +48,11 @@
 #include <globus_gridftp_server.h>
 
 /*
- * Local includes
+ * DS3 includes
  */
-#include "access_id.h"
+#include <ds3.h>
 
 globus_result_t
-access_id_lookup(char *  AccessIDFile,
-                 char *  Username, 
-                 char ** AccessID, 
-                 char ** SecretKey)
-{
-	FILE          * fptr   = NULL;
-	globus_result_t result = GLOBUS_SUCCESS;
-	char            buffer[1024];
+error_translate(ds3_error * Error);
 
-	GlobusGFSName(access_id_lookup);
-
-	fptr = fopen(AccessIDFile, "r");
-	if (!fptr)
-	{
-		result = GlobusGFSErrorWrapFailed("Attempting to open AccessIDFile file",
-		                                  GlobusGFSErrorSystemError("fopen()", errno));
-		goto cleanup;
-	}
-
-	while (fgets(buffer, sizeof(buffer), fptr) != NULL)
-	{
-		char * token = strtok(buffer, " ");
-		if (token == NULL)
-			continue;
-
-		if (*token == '#')
-			continue;
-
-		if (strcmp(token, Username) != 0)
-			continue;
-
-		token = strtok(NULL, " ");
-		if (!token)
-		{
-			result = GlobusGFSErrorGeneric("Could not get access ID for user");
-			goto cleanup;
-		}
-		*AccessID = globus_libc_strdup(token);
-
-		token = strtok(NULL, " \n");
-		if (!token)
-		{
-			result = GlobusGFSErrorGeneric("Could not get secret key for user");
-			goto cleanup;
-		}
-		*SecretKey = globus_libc_strdup(token);
-
-		goto cleanup;
-	}
-
-	result = GlobusGFSErrorGeneric("AccessID not found");
-
-cleanup:
-	if (fptr != NULL)
-		fclose(fptr);
-
-	if (result != GLOBUS_SUCCESS)
-	{
-		if (*SecretKey) globus_free(*SecretKey);
-		if (*AccessID)  globus_free(*AccessID);
-		*SecretKey = NULL;
-		*AccessID  = NULL;
-	}
-	return result;
-}
-
+#endif /* BLACKPEARL_DSI_ERROR_H */
