@@ -232,7 +232,7 @@ stat_object(ds3_client * Client, char * Pathname, globus_gfs_stat_t * GFSStat)
 		}
 
 		marker = NULL;
-		if (get_bucket_response->next_marker)
+		if (get_bucket_response->is_truncated)
 			marker = ds3_str_value(get_bucket_response->next_marker);
 	} while (marker > 0);
 
