@@ -1,7 +1,7 @@
 /*
  * University of Illinois/NCSA Open Source License
  *
- * Copyright © 2012-2014 NCSA.  All rights reserved.
+ * Copyright © 2015 NCSA.  All rights reserved.
  *
  * Developed by:
  *
@@ -39,80 +39,26 @@
  * DEALINGS WITH THE SOFTWARE.
  */
 
+#ifndef BLACKPEARL_DSI_CONFIG_H
+#define BLACKPEARL_DSI_CONFIG_H
+
 /*
  * Globus includes
  */
 #include <globus_gridftp_server.h>
 
-/*
- * Local includes.
- */
-#include "version.h"
+#define DEFAULT_CONFIG_FILE   "/etc/blackpearl/GridFTPConfig"
 
-/* This is used to define the debug print statements. */
-GlobusDebugDefine(GLOBUS_GRIDFTP_SERVER_BLACKPEARL);
+typedef struct config {
+	char * ConfigFilePath;
+    char * EndPoint;
+    char * AccessIDFile;
+} config_t;
+
+globus_result_t
+config_init(config_t ** Config);
 
 void
-dsi_init(globus_gfs_operation_t      Operation,
-         globus_gfs_session_info_t * SessionInfo)
-{
-}
+config_destroy(config_t * Config);
 
-globus_gfs_storage_iface_t blackpearl_dsi_iface =
-{
-	0,     /* Descriptor       */
-	dsi_init,  /* init_func        */
-	NULL,  /* destroy_func     */
-	NULL,  /* list_func        */
-	NULL,  /* send_func        */
-	NULL,  /* recv_func        */
-	NULL,  /* trev_func        */
-	NULL,  /* active_func      */
-	NULL,  /* passive_func     */
-	NULL,  /* data_destroy     */
-	NULL,  /* command_func     */
-	NULL,  /* stat_func        */
-	NULL,  /* set_cred_func    */
-	NULL,  /* buffer_send_func */
-	NULL,  /* realpath_func    */
-};
-
-static int activate(void);
-static int deactivate(void);
-
-GlobusExtensionDefineModule(globus_gridftp_server_blackpearl) =
-{
-	"globus_gridftp_server_blackpearl",
-	activate,
-	deactivate,
-	GLOBUS_NULL,
-	GLOBUS_NULL,
-	&version
-};
-
-int
-activate(void)
-{
-	int rc = globus_module_activate(GLOBUS_COMMON_MODULE);
-	if(rc != GLOBUS_SUCCESS)
-		return rc;
-
-	globus_extension_registry_add(GLOBUS_GFS_DSI_REGISTRY,
-	                              "blackpearl",
-	                              GlobusExtensionMyModule(globus_gridftp_server_blackpearl),
-	                              &blackpearl_dsi_iface);
-
-	GlobusDebugInit(GLOBUS_GRIDFTP_SERVER_BLACKPEARL,
-	                ERROR WARNING TRACE INTERNAL_TRACE INFO STATE INFO_VERBOSE);
-
-	return 0;
-}
-
-int
-deactivate(void)
-{
-	globus_extension_registry_remove(GLOBUS_GFS_DSI_REGISTRY, "blackpearl");
-	return 0;
-}
-
-
+#endif /* BLACKPEARL_DSI_CONFIG_H */
