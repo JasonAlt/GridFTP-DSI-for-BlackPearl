@@ -103,9 +103,10 @@ access_id_lookup(char *  AccessIDFile,
 		}
 		*SecretKey = globus_libc_strdup(token);
 
-		break;
+		goto cleanup;
 	}
 
+	result = GlobusGFSErrorGeneric("AccessID not found");
 
 cleanup:
 	if (fptr != NULL)
