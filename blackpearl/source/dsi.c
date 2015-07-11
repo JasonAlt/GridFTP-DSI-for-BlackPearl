@@ -56,6 +56,7 @@
 #include "version.h"
 #include "config.h"
 #include "error.h"
+#include "stat.h"
 #include "gds3.h"
 
 /* This is used to define the debug print statements. */
@@ -142,12 +143,13 @@ dsi_stat(globus_gfs_operation_t   Operation,
          globus_gfs_stat_info_t * StatInfo,
          void                   * Arg)
 {
-	GlobusGFSName(dsi_stat);
-
 	globus_result_t   result = GLOBUS_SUCCESS;
 	globus_gfs_stat_t gfs_stat;
+	ds3_client      * client = Arg;
 
-//	result = stat_object(StatInfo->pathname, &gfs_stat);
+	GlobusGFSName(dsi_stat);
+
+	result = stat_object(client, StatInfo->pathname, &gfs_stat);
 
 	if (result != GLOBUS_SUCCESS || StatInfo->file_only || !S_ISDIR(gfs_stat.mode))
 	{
