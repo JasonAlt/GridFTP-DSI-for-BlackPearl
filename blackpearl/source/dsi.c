@@ -56,6 +56,7 @@
 #include "version.h"
 #include "config.h"
 #include "error.h"
+#include "gds3.h"
 
 /* This is used to define the debug print statements. */
 GlobusDebugDefine(GLOBUS_GRIDFTP_SERVER_BLACKPEARL);
@@ -103,16 +104,9 @@ dsi_init(globus_gfs_operation_t      Operation,
 	}
 
 	/* Test the credentials with a get-service call. */
-	ds3_request * request = ds3_init_get_service();
 	ds3_get_service_response * response = NULL;
-	ds3_error * error   = ds3_get_service(bp_client, request, &response);
-
-	if (error)
-		result = error_translate(error);
-
-	ds3_free_request(request);
+	result = gds3_get_service(bp_client, &response);
 	ds3_free_service_response(response);
-	ds3_free_error(error);
 
 cleanup:
 	globus_gridftp_server_finished_session_start(Operation,
@@ -143,9 +137,32 @@ dsi_destroy(void * Arg)
 	}
 }
 
+void
+dsi_stat(globus_gfs_operation_t   Operation,
+         globus_gfs_stat_info_t * StatInfo,
+         void                   * Arg)
+{
+	GlobusGFSName(dsi_stat);
+
+	globus_result_t   result = GLOBUS_SUCCESS;
+	globus_gfs_stat_t gfs_stat;
+
+//	result = stat_object(StatInfo->pathname, &gfs_stat);
+
+	if (result != GLOBUS_SUCCESS || StatInfo->file_only || !S_ISDIR(gfs_stat.mode))
+	{
+		globus_gridftp_server_finished_stat(Operation, result, &gfs_stat, 1);
+//		stat_destroy(&gfs_stat);
+		return;
+	}
+
+//	stat_destroy(&gfs_stat);
+
+}
+
 globus_gfs_storage_iface_t blackpearl_dsi_iface =
 {
-	0,     /* Descriptor       */
+	0,           /* Descriptor       */
 	dsi_init,    /* init_func        */
 	dsi_destroy, /* destroy_func     */
 	NULL,  /* list_func        */
@@ -156,7 +173,7 @@ globus_gfs_storage_iface_t blackpearl_dsi_iface =
 	NULL,  /* passive_func     */
 	NULL,  /* data_destroy     */
 	NULL,  /* command_func     */
-	NULL,  /* stat_func        */
+	dsi_stat,  /* stat_func        */
 	NULL,  /* set_cred_func    */
 	NULL,  /* buffer_send_func */
 	NULL,  /* realpath_func    */
