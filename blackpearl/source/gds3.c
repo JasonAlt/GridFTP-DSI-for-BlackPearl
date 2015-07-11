@@ -72,3 +72,36 @@ gds3_get_service(ds3_client * Client, ds3_get_service_response ** Response)
 	return result;
 }
 
+globus_result_t
+gds3_get_bucket(ds3_client              *  Client,
+                char                    *  BucketName,
+                ds3_get_bucket_response ** Response,
+                char                    *  Delimiter,
+                char                    *  Prefix,
+                char                    *  Marker,
+                uint32_t                   MaxKeys)
+{
+	globus_result_t result  = GLOBUS_SUCCESS;
+	ds3_request   * request = ds3_init_get_bucket(BucketName);
+
+	if (Delimiter)
+		ds3_request_set_delimiter(request, Delimiter);
+	if (Prefix)
+		ds3_request_set_prefix(request, Prefix);
+	if (Marker)
+		ds3_request_set_marker(request, Marker);
+	if (MaxKeys > 0)
+		ds3_request_set_max_keys(request, MaxKeys);
+
+	ds3_error * error = ds3_get_bucket(Client, request, Response);
+	ds3_free_request(request);
+
+	if (error)
+	{
+		result = error_translate(error);
+        ds3_free_error(error);
+		return result;
+	}
+
+    return GLOBUS_SUCCESS;
+}

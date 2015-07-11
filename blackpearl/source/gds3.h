@@ -55,4 +55,13 @@
 globus_result_t
 gds3_get_service(ds3_client *, ds3_get_service_response **);
 
+globus_result_t
+gds3_get_bucket(ds3_client              *  Client,
+                char                    *  BucketName,
+                ds3_get_bucket_response ** Response,
+                char                    *  Delimiter,
+                char                    *  Prefix,
+                char                    *  Marker,
+                uint32_t                   MaxKeys);
+
 #endif /* BLACKPEARL_GDSI_DS3_H */
