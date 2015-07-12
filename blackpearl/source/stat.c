@@ -232,12 +232,15 @@ stat_object(ds3_client * Client, char * Pathname, globus_gfs_stat_t * GFSStat)
 		{
 			if (strcmp(object_name, ds3_str_value(get_bucket_response->objects[i].name)) == 0)
 			{
+				char * last_modified = NULL;
+				if (get_bucket_response->objects[i].last_modified)
+					last_modified = ds3_str_value(get_bucket_response->objects[i].last_modified);
 				result = stat_populate(basename(object_name),
 				                       S_IFREG,
 				                       1,
 				                       get_bucket_response->objects[i].size,
 				                       ds3_str_value(get_bucket_response->objects[i].owner->name),
-				                       ds3_str_value(get_bucket_response->objects[i].last_modified),
+				                       last_modified,
 				                       GFSStat);
 				goto cleanup;
 			}
@@ -386,12 +389,15 @@ stat_directory_entries(ds3_client        *  Client,
 	{
 		if (prefix && strcmp(ds3_str_value(get_bucket_response->objects[i].name), prefix) == 0)
 			continue;
+		char * last_modified = NULL;
+		if (get_bucket_response->objects[i].last_modified)
+			last_modified = ds3_str_value(get_bucket_response->objects[i].last_modified);
 		result = stat_populate(ds3_str_value(get_bucket_response->objects[i].name) + prefix_len,
 		                       S_IFREG,
 		                       1,
 		                       get_bucket_response->objects[i].size,
 		                       ds3_str_value(get_bucket_response->objects[i].owner->name),
-		                       ds3_str_value(get_bucket_response->objects[i].last_modified),
+		                       last_modified,
 		                       &GFSStatArray[*CountOut]);
 		if (result != GLOBUS_SUCCESS)
 			goto cleanup;
