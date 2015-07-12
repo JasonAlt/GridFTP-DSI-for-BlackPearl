@@ -196,7 +196,6 @@ stor(ds3_client                 * Client,
 	int             initted   = 0;
 	pthread_t       thread;
 	pthread_attr_t  attr;
-// Need to make sure this isn't a restart
 
 	GlobusGFSName(stor);
 

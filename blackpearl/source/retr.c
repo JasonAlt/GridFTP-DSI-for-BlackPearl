@@ -58,7 +58,7 @@
 /*
  * Local includes
  */
-#include "stor.h"
+#include "retr.h"
 #include "gds3.h"
 #include "path.h"
 
@@ -75,8 +75,6 @@ typedef struct {
 
 	globus_result_t              Result;
 	globus_size_t                Length;
-	globus_bool_t                Eof;
-
 } retr_info_t;
 
 void
@@ -186,7 +184,6 @@ retr(ds3_client                 * Client,
 	int             initted   = 0;
 	pthread_t       thread;
 	pthread_attr_t  attr;
-// Need to make sure this isn't a restart
 
 	GlobusGFSName(stor);
 
