@@ -55,6 +55,7 @@
 #include "commands.h"
 #include "path.h"
 #include "gds3.h"
+#include "cksm.h"
 
 void
 commands_mkdir(globus_gfs_operation_t      Operation,
@@ -207,6 +208,10 @@ commands_run(globus_gfs_operation_t      Operation,
 		commands_unlink(Operation, CommandInfo, Client, Callback);
 		break;
 
+    case GLOBUS_GFS_CMD_CKSM:
+		cksm(Operation, CommandInfo, Client, Callback);
+		break;
+
 	case GLOBUS_GFS_CMD_SITE_UTIME:       // No S3/DS3 support (need X attributes)
 	case GLOBUS_GFS_CMD_RNTO:             // No S3/DS3 support
 	case GLOBUS_GFS_CMD_RNFR:             // No S3/DS3 support
@@ -214,7 +219,6 @@ commands_run(globus_gfs_operation_t      Operation,
 	case GLOBUS_GFS_CMD_SITE_CHGRP:       // No S3/DS3 support
 	case GLOBUS_GFS_CMD_SITE_SYMLINKFROM: // No S3/DS3 support
 	case GLOBUS_GFS_CMD_SITE_SYMLINK:     // No S3/DS3 support
-    case GLOBUS_GFS_CMD_CKSM:
     case GLOBUS_GFS_CMD_SITE_AUTHZ_ASSERT:
     case GLOBUS_GFS_CMD_SITE_RDEL:
     case GLOBUS_GFS_CMD_SITE_DSI:

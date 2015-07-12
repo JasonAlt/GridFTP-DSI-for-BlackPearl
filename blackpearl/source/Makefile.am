@@ -51,13 +51,14 @@ lib_LTLIBRARIES = libglobus_gridftp_server_blackpearl.la
 
 SOURCES = dsi.c \
 	      config.c \
-	      access_id.c \ 
-	      stat.c \ 
-	      gds3.c \ 
-	      path.c \ 
-	      commands.c \ 
-	      stor.c \ 
-	      retr.c \ 
+	      access_id.c \
+	      stat.c \
+	      gds3.c \
+	      path.c \
+	      commands.c \
+	      stor.c \
+	      retr.c \
+	      cksm.c \
 	      error.c
 libglobus_gridftp_server_blackpearl_la_SOURCES=$(SOURCES)
 
