@@ -60,14 +60,14 @@ gds3_get_service(ds3_client * Client, ds3_get_service_response ** Response)
 {
 	globus_result_t result = GLOBUS_SUCCESS;
 
-    ds3_request * request = ds3_init_get_service();
-    ds3_error * error = ds3_get_service(Client, request, Response);
+	ds3_request * request = ds3_init_get_service();
+	ds3_error * error = ds3_get_service(Client, request, Response);
 
-    if (error)
-        result = error_translate(error);
+	if (error)
+		result = error_translate(error);
 
-    ds3_free_request(request);
-    ds3_free_error(error);
+	ds3_free_request(request);
+	ds3_free_error(error);
 
 	return result;
 }
@@ -103,5 +103,5 @@ gds3_get_bucket(ds3_client              *  Client,
 		return result;
 	}
 
-    return GLOBUS_SUCCESS;
+	return GLOBUS_SUCCESS;
 }

@@ -68,6 +68,8 @@ stat_populate(char              * Name,
 {
 	GlobusGFSName(stat_populate);
 
+	memset(GFSStat, 0, sizeof(globus_gfs_stat_t));
+
 	GFSStat->mode  = Type | S_IRWXU;
 	GFSStat->nlink = LinkCount;
 	GFSStat->ino   = 0xDEADBEEF;
@@ -202,7 +204,7 @@ stat_object(ds3_client * Client, char * Pathname, globus_gfs_stat_t * GFSStat)
 
 		/* Check if it is a directory */
 		for (i = 0; i < get_bucket_response->num_common_prefixes; i++)
-        {
+		{
 			if (strncmp(object_name,
 			            ds3_str_value(get_bucket_response->common_prefixes[i]),
 			            ds3_str_size(get_bucket_response->common_prefixes[i])-1) == 0)
@@ -238,9 +240,10 @@ stat_object(ds3_client * Client, char * Pathname, globus_gfs_stat_t * GFSStat)
 			}
 		}
 
+		if (marker) free(marker);
 		marker = NULL;
 		if (get_bucket_response->is_truncated)
-			marker = ds3_str_value(get_bucket_response->next_marker);
+			marker = strdup(ds3_str_value(get_bucket_response->next_marker));
 	} while (marker > 0);
 
 	result = GlobusGFSErrorGeneric("No such file or directory");
@@ -271,6 +274,7 @@ stat_directory_entries(ds3_client        *  Client,
 	ds3_get_bucket_response  * get_bucket_response  = NULL;
 	int i;
 	int link_count;
+	int prefix_len = 0;
 
 	GlobusGFSName(stat_directory_entries);
 
@@ -340,7 +344,60 @@ stat_directory_entries(ds3_client        *  Client,
 	{
 		prefix = malloc(strlen(object_name) + 2);
 		sprintf(prefix, "%s/", object_name);
+		prefix_len = strlen(prefix);
 	}
+
+	result = gds3_get_bucket(Client,
+	                         bucket_name,
+	                         &get_bucket_response,
+	                         "/", /* Delimiter */
+	                         prefix,
+	                         *Marker,
+	                         MaxEntries);
+
+	if (result != GLOBUS_SUCCESS)
+		goto cleanup;
+
+	/* Check if it is a directory */
+	for (i = 0; i < get_bucket_response->num_common_prefixes; i++)
+	{
+		link_count = 1; /* XXX */
+		char * name = strdup(ds3_str_value(get_bucket_response->common_prefixes[i]));
+		name[strlen(name)-1] = '\0';
+		result = stat_populate(name + prefix_len,
+		                       S_IFDIR,
+		                       link_count,
+		                       1024,
+		                       ds3_str_value(get_service_response->owner->name),
+		                       NULL,
+		                       &GFSStatArray[*CountOut]);
+		free(name);
+		if (result != GLOBUS_SUCCESS)
+			goto cleanup;
+		(*CountOut)++;
+	}
+
+	/* Check if it is a file */
+	for (i = 0; i < get_bucket_response->num_objects; i++)
+	{
+		if (prefix && strcmp(ds3_str_value(get_bucket_response->objects[i].name), prefix) == 0)
+			continue;
+		result = stat_populate(ds3_str_value(get_bucket_response->objects[i].name) + prefix_len,
+		                       S_IFREG,
+		                       1,
+		                       get_bucket_response->objects[i].size,
+		                       ds3_str_value(get_bucket_response->objects[i].owner->name),
+		                       ds3_str_value(get_bucket_response->objects[i].last_modified),
+		                       &GFSStatArray[*CountOut]);
+		if (result != GLOBUS_SUCCESS)
+			goto cleanup;
+		(*CountOut)++;
+	}
+
+	if (*Marker) free(*Marker);
+	*Marker = NULL;
+	if (get_bucket_response->is_truncated)
+		*Marker = strdup(ds3_str_value(get_bucket_response->next_marker));
 
 cleanup:
 	ds3_free_service_response(get_service_response);
@@ -350,7 +407,6 @@ cleanup:
 	if (object_name) free(object_name);
 
 	return result;
-
 }
 
 void
