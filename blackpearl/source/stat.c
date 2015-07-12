@@ -72,7 +72,9 @@ stat_populate(char              * Name,
 
 	GFSStat->mode  = Type | S_IRWXU;
 	GFSStat->nlink = LinkCount;
+// XXX Inodes not supported
 	GFSStat->ino   = 0xDEADBEEF;
+// XXX UIDs not supported
 //	XXX GFSStat->uid   = HpssStat->st_uid;
 	GFSStat->gid   = 0; // Groups not supported
 	GFSStat->dev   = 0;
@@ -107,6 +109,7 @@ stat_populate(char              * Name,
 	return GLOBUS_SUCCESS;
 }
 
+// Directory link count not supported
 globus_result_t
 stat_get_link_count(ds3_client * Client, char * Path, int * LinkCount)
 {
@@ -291,6 +294,7 @@ stat_directory_entries(ds3_client        *  Client,
 	{
 		if ((get_service_response->num_buckets + 2) > MaxEntries)
 		{
+// XXX limit on number of buckets
 			result = GlobusGFSErrorGeneric("Too many buckets!");
 			goto cleanup;
 		}
@@ -300,7 +304,7 @@ stat_directory_entries(ds3_client        *  Client,
 		                       get_service_response->num_buckets + 2,
 		                       1024,
 		                       ds3_str_value(get_service_response->owner->name),
-		                       NULL,
+		                       NULL, // XXX no modify time
 		                       &GFSStatArray[*CountOut]);
 		if (result != GLOBUS_SUCCESS)
 			goto cleanup;
@@ -311,7 +315,7 @@ stat_directory_entries(ds3_client        *  Client,
 		                       get_service_response->num_buckets + 2,
 		                       1024,
 		                       ds3_str_value(get_service_response->owner->name),
-		                       NULL,
+		                       NULL, // XXX no modify time
 		                       &GFSStatArray[*CountOut]);
 		if (result != GLOBUS_SUCCESS)
 			goto cleanup;
@@ -369,7 +373,7 @@ stat_directory_entries(ds3_client        *  Client,
 		                       link_count,
 		                       1024,
 		                       ds3_str_value(get_service_response->owner->name),
-		                       NULL,
+		                       NULL, // XXX no modify time
 		                       &GFSStatArray[*CountOut]);
 		free(name);
 		if (result != GLOBUS_SUCCESS)

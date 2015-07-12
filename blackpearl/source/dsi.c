@@ -53,6 +53,7 @@
  * Local includes.
  */
 #include "access_id.h"
+#include "commands.h"
 #include "version.h"
 #include "config.h"
 #include "error.h"
@@ -139,6 +140,14 @@ dsi_destroy(void * Arg)
 }
 
 void
+dsi_command(globus_gfs_operation_t      Operation,
+            globus_gfs_command_info_t * CommandInfo,
+            void                      * UserArg)
+{
+	commands_run(Operation, CommandInfo, UserArg, globus_gridftp_server_finished_command);
+}
+
+void
 dsi_stat(globus_gfs_operation_t   Operation,
          globus_gfs_stat_info_t * StatInfo,
          void                   * Arg)
@@ -165,6 +174,7 @@ dsi_stat(globus_gfs_operation_t   Operation,
 	 * Directory listing.
 	 */
 	char * marker = NULL;
+// XXX partial stats not working on subdirectories due to unknown memory bug
 //	do {
 		globus_gfs_stat_t gfs_stat_array[STAT_ENTRIES_PER_REPLY];
 		int stat_count;
@@ -200,8 +210,8 @@ globus_gfs_storage_iface_t blackpearl_dsi_iface =
 	NULL,  /* active_func      */
 	NULL,  /* passive_func     */
 	NULL,  /* data_destroy     */
-	NULL,  /* command_func     */
-	dsi_stat,  /* stat_func        */
+	dsi_command, /* command_func     */
+	dsi_stat,    /* stat_func        */
 	NULL,  /* set_cred_func    */
 	NULL,  /* buffer_send_func */
 	NULL,  /* realpath_func    */

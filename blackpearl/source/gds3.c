@@ -105,3 +105,76 @@ gds3_get_bucket(ds3_client              *  Client,
 
 	return GLOBUS_SUCCESS;
 }
+
+globus_result_t
+gds3_put_bucket(ds3_client * Client, char * BucketName)
+{
+	globus_result_t   result  = GLOBUS_SUCCESS;
+	ds3_request     * request = NULL;
+	ds3_error       * error   = NULL;
+
+	request = ds3_init_put_bucket(BucketName);
+	error   = ds3_put_bucket(Client, request);
+	result  = error_translate(error);
+	ds3_free_error(error);
+	ds3_free_request(request);
+	return result;
+}
+
+globus_result_t
+gds3_put_object_for_job(ds3_client * Client,
+                        char       * BucketName,
+                        char       * ObjectName,
+                        uint64_t     Offset,
+                        uint64_t     Length,
+                        char       * JobID,
+                        size_t    (* Callback)(void*, size_t, size_t, void*),
+                        void       * CallbackArg)
+{
+	globus_result_t   result  = GLOBUS_SUCCESS;
+	ds3_request     * request = NULL;
+	ds3_error       * error   = NULL;
+
+	request = ds3_init_put_object_for_job(BucketName, ObjectName, Offset, Length, JobID);
+	error   = ds3_put_object(Client, request, CallbackArg, Callback);
+	result  = error_translate(error);
+	ds3_free_request(request);
+	ds3_free_error(error);
+	return result;
+}
+
+
+globus_result_t
+gds3_delete_bucket(ds3_client * Client, char * BucketName)
+{
+	globus_result_t   result  = GLOBUS_SUCCESS;
+	ds3_request     * request = NULL;
+	ds3_error       * error   = NULL;
+
+	request = ds3_init_delete_bucket(BucketName);
+	error   = ds3_delete_bucket(Client, request);
+	result  = error_translate(error);
+	ds3_free_request(request);
+	ds3_free_error(error);
+	return result;
+}
+
+globus_result_t
+gds3_delete_object(ds3_client * Client,
+                   char       * BucketName, 
+                   char       * ObjectName)
+{
+	globus_result_t   result  = GLOBUS_SUCCESS;
+	ds3_request     * request = NULL;
+	ds3_error       * error   = NULL;
+
+	request = ds3_init_delete_object(BucketName, ObjectName);
+	error   = ds3_delete_object(Client, request);
+	result  = error_translate(error);
+	ds3_free_request(request);
+	ds3_free_error(error);
+	return result;
+}
+
+
+
