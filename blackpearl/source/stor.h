@@ -1,7 +1,7 @@
 /*
  * University of Illinois/NCSA Open Source License
  *
- * Copyright © 2015 NCSA.  All rights reserved.
+ * Copyright  2015 NCSA.  All rights reserved.
  *
  * Developed by:
  *
@@ -39,8 +39,8 @@
  * DEALINGS WITH THE SOFTWARE.
  */
 
-#ifndef BLACKPEARL_DSI_GDS3_H
-#define BLACKPEARL_DSI_GDS3_H
+#ifndef BLACKPEARL_DSI_STOR_H
+#define BLACKPEARL_DSI_STOR_H
 
 /*
  * Globus includes
@@ -52,45 +52,9 @@
  */
 #include <ds3.h>
 
-globus_result_t
-gds3_get_service(ds3_client *, ds3_get_service_response **);
+void
+stor(ds3_client                 * Client, 
+     globus_gfs_operation_t       Operation,
+     globus_gfs_transfer_info_t * TransferInfo);
 
-globus_result_t
-gds3_get_bucket(ds3_client              *  Client,
-                char                    *  BucketName,
-                ds3_get_bucket_response ** Response,
-                char                    *  Delimiter,
-                char                    *  Prefix,
-                char                    *  Marker,
-                uint32_t                   MaxKeys);
-
-globus_result_t
-gds3_put_bucket(ds3_client * Client, char * BucketName);
-
-globus_result_t
-gds3_put_object_for_job(ds3_client * Client,
-                        char       * BucketName,
-                        char       * ObjectName,
-                        uint64_t     Offset,
-                        uint64_t     Length,
-                        char       * JobID,
-                        size_t    (* Callback)(void*, size_t, size_t, void*),
-                        void       * CallbackArg);
-
-globus_result_t
-gds3_get_object_for_job(ds3_client * Client,
-                        char       * BucketName,
-                        char       * ObjectName,
-                        uint64_t     Offset,
-                        char       * JobID,
-                        size_t    (* Callback)(void*, size_t, size_t, void*),
-                        void       * CallbackArg);
-
-globus_result_t
-gds3_delete_bucket(ds3_client * Client, char * BucketName);
-
-globus_result_t
-gds3_delete_object(ds3_client * Client, char * BucketName, char * ObjectName);
-
-
-#endif /* BLACKPEARL_GDSI_DS3_H */
+#endif /* BLACKPEARL_DSI_STOR_H */

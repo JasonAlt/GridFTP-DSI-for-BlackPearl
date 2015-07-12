@@ -57,6 +57,7 @@ SOURCES = dsi.c \
 	      path.c \ 
 	      commands.c \ 
 	      stor.c \ 
+	      retr.c \ 
 	      error.c
 libglobus_gridftp_server_blackpearl_la_SOURCES=$(SOURCES)
 

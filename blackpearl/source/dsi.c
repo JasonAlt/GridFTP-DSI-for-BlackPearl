@@ -59,6 +59,7 @@
 #include "error.h"
 #include "stat.h"
 #include "stor.h"
+#include "retr.h"
 #include "gds3.h"
 
 /* This is used to define the debug print statements. */
@@ -141,6 +142,14 @@ dsi_destroy(void * Arg)
 }
 
 void
+dsi_send(globus_gfs_operation_t       Operation,
+         globus_gfs_transfer_info_t * TransferInfo,
+         void                       * UserArg)
+{
+	retr(UserArg, Operation, TransferInfo);
+}
+
+void
 dsi_recv(globus_gfs_operation_t       Operation,
          globus_gfs_transfer_info_t * TransferInfo,
          void                       * UserArg)
@@ -215,18 +224,18 @@ globus_gfs_storage_iface_t blackpearl_dsi_iface =
 	0,           /* Descriptor       */
 	dsi_init,    /* init_func        */
 	dsi_destroy, /* destroy_func     */
-	NULL,  /* list_func        */
-	NULL,  /* send_func        */
-	dsi_recv,  /* recv_func        */
-	NULL,  /* trev_func        */
-	NULL,  /* active_func      */
-	NULL,  /* passive_func     */
-	NULL,  /* data_destroy     */
+	NULL,        /* list_func        */
+	dsi_send,    /* send_func        */
+	dsi_recv,    /* recv_func        */
+	NULL,        /* trev_func        */
+	NULL,        /* active_func      */
+	NULL,        /* passive_func     */
+	NULL,        /* data_destroy     */
 	dsi_command, /* command_func     */
 	dsi_stat,    /* stat_func        */
-	NULL,  /* set_cred_func    */
-	NULL,  /* buffer_send_func */
-	NULL,  /* realpath_func    */
+	NULL,        /* set_cred_func    */
+	NULL,        /* buffer_send_func */
+	NULL,        /* realpath_func    */
 };
 
 static int activate(void);

@@ -143,6 +143,26 @@ gds3_put_object_for_job(ds3_client * Client,
 	return result;
 }
 
+globus_result_t
+gds3_get_object_for_job(ds3_client * Client,
+                        char       * BucketName,
+                        char       * ObjectName,
+                        uint64_t     Offset,
+                        char       * JobID,
+                        size_t    (* Callback)(void*, size_t, size_t, void*),
+                        void       * CallbackArg)
+{
+	globus_result_t   result  = GLOBUS_SUCCESS;
+	ds3_request     * request = NULL;
+	ds3_error       * error   = NULL;
+
+	request = ds3_init_get_object_for_job(BucketName, ObjectName, Offset, JobID);
+	error   = ds3_get_object(Client, request, CallbackArg, Callback);
+	result  = error_translate(error);
+	ds3_free_request(request);
+	ds3_free_error(error);
+	return result;
+}
 
 globus_result_t
 gds3_delete_bucket(ds3_client * Client, char * BucketName)
