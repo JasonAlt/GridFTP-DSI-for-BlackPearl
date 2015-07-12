@@ -58,6 +58,7 @@
 #include "config.h"
 #include "error.h"
 #include "stat.h"
+#include "stor.h"
 #include "gds3.h"
 
 /* This is used to define the debug print statements. */
@@ -140,6 +141,14 @@ dsi_destroy(void * Arg)
 }
 
 void
+dsi_recv(globus_gfs_operation_t       Operation,
+         globus_gfs_transfer_info_t * TransferInfo,
+         void                       * UserArg)
+{
+	stor(UserArg, Operation, TransferInfo);
+}
+
+void
 dsi_command(globus_gfs_operation_t      Operation,
             globus_gfs_command_info_t * CommandInfo,
             void                      * UserArg)
@@ -162,8 +171,11 @@ dsi_stat(globus_gfs_operation_t   Operation,
 
 	if (result != GLOBUS_SUCCESS || StatInfo->file_only || !S_ISDIR(gfs_stat.mode))
 	{
-		globus_gridftp_server_finished_stat(Operation, result, &gfs_stat, 1);
-		stat_destroy(&gfs_stat);
+		globus_gridftp_server_finished_stat(Operation,
+		                                    result, 
+		                                    &gfs_stat, 
+		                                    result ? 0 : 1);
+		if (!result) stat_destroy(&gfs_stat);
 		return;
 	}
 
@@ -205,7 +217,7 @@ globus_gfs_storage_iface_t blackpearl_dsi_iface =
 	dsi_destroy, /* destroy_func     */
 	NULL,  /* list_func        */
 	NULL,  /* send_func        */
-	NULL,  /* recv_func        */
+	dsi_recv,  /* recv_func        */
 	NULL,  /* trev_func        */
 	NULL,  /* active_func      */
 	NULL,  /* passive_func     */
