@@ -206,19 +206,14 @@ commands_run(globus_gfs_operation_t      Operation,
 	case GLOBUS_GFS_CMD_DELE:
 		commands_unlink(Operation, CommandInfo, Client, Callback);
 		break;
-//	case GLOBUS_GFS_CMD_RNTO:
-//		commands_rename(Operation, CommandInfo, Callback);
-//		break;
-//	case GLOBUS_GFS_CMD_RNFR:
-//		break;
-//	case GLOBUS_GFS_CMD_SITE_UTIME:
-//		commands_utime(Operation, CommandInfo, Callback);
-//		break;
 
-	case GLOBUS_GFS_CMD_SITE_CHMOD:
-	case GLOBUS_GFS_CMD_SITE_CHGRP:
-	case GLOBUS_GFS_CMD_SITE_SYMLINKFROM:
-	case GLOBUS_GFS_CMD_SITE_SYMLINK:
+	case GLOBUS_GFS_CMD_SITE_UTIME:       // No S3/DS3 support (need X attributes)
+	case GLOBUS_GFS_CMD_RNTO:             // No S3/DS3 support
+	case GLOBUS_GFS_CMD_RNFR:             // No S3/DS3 support
+	case GLOBUS_GFS_CMD_SITE_CHMOD:       // No S3/DS3 support
+	case GLOBUS_GFS_CMD_SITE_CHGRP:       // No S3/DS3 support
+	case GLOBUS_GFS_CMD_SITE_SYMLINKFROM: // No S3/DS3 support
+	case GLOBUS_GFS_CMD_SITE_SYMLINK:     // No S3/DS3 support
     case GLOBUS_GFS_CMD_CKSM:
     case GLOBUS_GFS_CMD_SITE_AUTHZ_ASSERT:
     case GLOBUS_GFS_CMD_SITE_RDEL:
