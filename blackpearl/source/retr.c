@@ -75,20 +75,77 @@ retr_ds3_gridftp_callback(globus_gfs_operation_t Operation,
 	{
 		if (!retr_info->Result)
 			retr_info->Result = Result;
+		globus_list_insert(&retr_info->FreeBufferList, (char *)Buffer);
 		pthread_cond_signal(&retr_info->Cond);
 	}
 	pthread_mutex_unlock(&retr_info->Mutex);
 }
 
+/*
+ * Called locked.
+ */
+globus_result_t
+retr_get_free_buffer(retr_info_t *  RetrInfo,
+                     char        ** FreeBuffer)
+{
+	int all_buf_cnt  = 0;
+	int free_buf_cnt = 0;
+
+	GlobusGFSName(retr_get_free_buffer);
+
+	/*
+	 * Check for the optimal number of concurrent writes.
+	 */
+	if (RetrInfo->ConnChkCnt++ == 0)
+		globus_gridftp_server_get_optimal_concurrency(RetrInfo->Operation,
+		                                             &RetrInfo->OptConnCnt);
+	if (RetrInfo->ConnChkCnt >= 100) RetrInfo->ConnChkCnt = 0;
+
+	/*
+	 * Wait for a free buffer or wait until conditions are right to create one.
+	 */
+	while (1)
+	{
+		/* Check for error first. */
+		if (RetrInfo->Result)
+			return RetrInfo->Result;
+
+		all_buf_cnt  = globus_list_size(RetrInfo->AllBufferList);
+		free_buf_cnt = globus_list_size(RetrInfo->FreeBufferList);
+
+		/* If we have a free buffer... */
+		if (free_buf_cnt) break;
+		/* If we can create another free buffer... */
+		if (all_buf_cnt < RetrInfo->OptConnCnt) break;
+
+		pthread_cond_wait(&RetrInfo->Cond, &RetrInfo->Mutex);
+	}
+
+	if (!globus_list_empty(RetrInfo->FreeBufferList))
+	{
+		*FreeBuffer = globus_list_remove(&RetrInfo->FreeBufferList, RetrInfo->FreeBufferList);
+		return GLOBUS_SUCCESS;
+	}
+
+	*FreeBuffer = globus_malloc(RetrInfo->BlockSize);
+	if (!*FreeBuffer)
+		return GlobusGFSErrorMemory("free_buffer");
+	globus_list_insert(&RetrInfo->AllBufferList, *FreeBuffer);
+	return GLOBUS_SUCCESS;
+}
+
 size_t
-retr_ds3_callback(void * Buffer,
+retr_ds3_callback(void * ReadyBuffer,
                   size_t Length,
                   size_t Nmemb,
                   void * UserArg)
 {
-	globus_result_t result    = GLOBUS_SUCCESS;
-	retr_info_t   * retr_info = UserArg;
-	int             rc        = Length + Nmemb;
+	globus_result_t result      = GLOBUS_SUCCESS;
+	retr_info_t   * retr_info   = UserArg;
+	char          * free_buffer = NULL;
+	int             rc          = Length * Nmemb;
+	int             buf_offset  = 0;
+	int             cpy_length  = 0;
 
 	GlobusGFSName(retr_ds3_callback);
 
@@ -98,34 +155,64 @@ retr_ds3_callback(void * Buffer,
 			globus_gridftp_server_begin_transfer(retr_info->Operation, 0, NULL);
 		retr_info->Started = 1;
 
-		result = globus_gridftp_server_register_write(retr_info->Operation,
-		                                              Buffer,
-		                                              Length * Nmemb,
-		                                              retr_info->Offset,
-		                                              0,
-		                                              retr_ds3_gridftp_callback,
-		                                              retr_info);
-		retr_info->Offset += Length * Nmemb;
-
-		if (result)
+		while (buf_offset != (Length*Nmemb))
 		{
-			retr_info->Result = result;
-			rc = -1;
-			goto cleanup;
-		}
+			result = retr_get_free_buffer(retr_info, &free_buffer);
+			if (result)
+			{
+				rc = 1; /* Signal to shutdown. */
+				if (!retr_info->Result) retr_info->Result = result;
+				goto cleanup;
+			}
 
-		pthread_cond_wait(&retr_info->Cond, &retr_info->Mutex);
+			cpy_length = (Length*Nmemb) - buf_offset;
+			if (cpy_length > retr_info->BlockSize)
+				cpy_length = retr_info->BlockSize;
 
-		if (retr_info->Result)
-		{
-			rc = -1;
-			goto cleanup;
+
+			memcpy(free_buffer, ReadyBuffer, cpy_length);
+
+			result = globus_gridftp_server_register_write(retr_info->Operation,
+			                                              ReadyBuffer + buf_offset,
+			                                              cpy_length,
+			                                              retr_info->Offset + buf_offset,
+			                                              0,
+			                                              retr_ds3_gridftp_callback,
+			                                              retr_info);
+
+			if (result)
+			{
+				if(!retr_info->Result) retr_info->Result = result;
+				rc = -1;
+				goto cleanup;
+			}
+
+			retr_info->Offset += cpy_length;
+			buf_offset        += cpy_length;
 		}
 	}
 cleanup:
 	pthread_mutex_unlock(&retr_info->Mutex);
 
 	return rc;
+}
+
+void
+retr_wait_for_gridftp(retr_info_t * RetrInfo)
+{
+	pthread_mutex_lock(&RetrInfo->Mutex);
+	{
+		while (1)
+		{
+			if (RetrInfo->Result) break;
+
+			if (globus_list_size(RetrInfo->AllBufferList) == globus_list_size(RetrInfo->FreeBufferList))
+				break;
+
+			pthread_cond_wait(&RetrInfo->Cond, &RetrInfo->Mutex);
+		}
+	}
+	pthread_mutex_unlock(&RetrInfo->Mutex);
 }
 
 void *
@@ -142,12 +229,17 @@ retr_thread(void * UserArg)
 	                                 retr_ds3_callback,
 	                                 retr_info);
 
+	if (!result)
+		retr_wait_for_gridftp(retr_info);
+
 	if (!result) result = retr_info->Result;
 	globus_gridftp_server_finished_transfer(retr_info->Operation, result);
 	pthread_mutex_destroy(&retr_info->Mutex);
 	pthread_cond_destroy(&retr_info->Cond);
 	free(retr_info->Bucket);
 	free(retr_info->Object);
+	globus_list_free(retr_info->FreeBufferList);
+	globus_list_destroy_all(retr_info->AllBufferList, free);
 	free(retr_info);
 
 	return NULL;
