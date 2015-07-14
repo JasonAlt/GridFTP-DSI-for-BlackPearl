@@ -43,14 +43,46 @@
 #define BLACKPEARL_DSI_RETR_H
 
 /*
+ * System includes
+ */
+#include <pthread.h>
+
+/*
  * Globus includes
  */
 #include <globus_gridftp_server.h>
+#include <globus_list.h>
 
 /*
  * DS3 includes
  */
 #include <ds3.h>
+
+typedef struct {
+	globus_gfs_operation_t       Operation;
+	globus_gfs_transfer_info_t * TransferInfo;
+
+	ds3_client                 * Client;
+	char                       * Bucket;
+	char                       * Object;
+
+	int                          Started;
+
+	globus_result_t              Result;
+	globus_size_t                BlockSize;
+
+	pthread_mutex_t              Mutex;
+	pthread_cond_t               Cond;
+
+	uint64_t                     Offset;
+
+	int OptConnCnt;
+	int ConnChkCnt;
+
+	globus_list_t * AllBufferList;
+	globus_list_t * FreeBufferList;
+
+} retr_info_t;
 
 void
 retr(ds3_client                 * Client, 

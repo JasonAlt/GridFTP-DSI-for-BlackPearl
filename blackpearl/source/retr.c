@@ -62,21 +62,6 @@
 #include "gds3.h"
 #include "path.h"
 
-typedef struct {
-	pthread_mutex_t              Mutex;
-	pthread_cond_t               Cond;
-	ds3_client                 * Client;
-	globus_gfs_operation_t       Operation;
-	globus_gfs_transfer_info_t * TransferInfo;
-	char                       * Bucket;
-	char                       * Object;
-	int                          Started;
-	uint64_t                     Offset;
-
-	globus_result_t              Result;
-	globus_size_t                Length;
-} retr_info_t;
-
 void
 retr_ds3_gridftp_callback(globus_gfs_operation_t Operation,
                           globus_result_t        Result,
@@ -90,7 +75,6 @@ retr_ds3_gridftp_callback(globus_gfs_operation_t Operation,
 	{
 		if (!retr_info->Result)
 			retr_info->Result = Result;
-		retr_info->Length = Length;
 		pthread_cond_signal(&retr_info->Cond);
 	}
 	pthread_mutex_unlock(&retr_info->Mutex);
@@ -104,16 +88,16 @@ retr_ds3_callback(void * Buffer,
 {
 	globus_result_t result    = GLOBUS_SUCCESS;
 	retr_info_t   * retr_info = UserArg;
-	int             rc        = 0;
+	int             rc        = Length + Nmemb;
 
 	GlobusGFSName(retr_ds3_callback);
 
-	if (!retr_info->Started)
-		globus_gridftp_server_begin_transfer(retr_info->Operation, 0, NULL);
-	retr_info->Started = 1;
-
 	pthread_mutex_lock(&retr_info->Mutex);
 	{
+		if (!retr_info->Started)
+			globus_gridftp_server_begin_transfer(retr_info->Operation, 0, NULL);
+		retr_info->Started = 1;
+
 		result = globus_gridftp_server_register_write(retr_info->Operation,
 		                                              Buffer,
 		                                              Length * Nmemb,
@@ -137,8 +121,6 @@ retr_ds3_callback(void * Buffer,
 			rc = -1;
 			goto cleanup;
 		}
-
-		rc = retr_info->Length;
 	}
 cleanup:
 	pthread_mutex_unlock(&retr_info->Mutex);
@@ -214,6 +196,8 @@ retr(ds3_client                 * Client,
 	retr_info->TransferInfo = TransferInfo;
 	retr_info->Bucket       = bucket;
 	retr_info->Object       = object;
+
+	globus_gridftp_server_get_block_size(Operation, &retr_info->BlockSize);
 
 	/*
 	 * Launch a detached thread.
