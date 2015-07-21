@@ -46,11 +46,57 @@
  * Globus includes
  */
 #include <globus_gridftp_server.h>
+#include <globus_list.h>
 
 /*
  * DS3 includes
  */
 #include <ds3.h>
+
+/*
+ * Because of the sequential, ascending nature of offsets with DS3,
+ * we do not need a range list.
+ */
+struct stor_info;
+
+typedef struct {
+	char             * Buffer;
+	globus_off_t       BufferOffset;   // Moves as buffer is consumed
+	globus_off_t       TransferOffset; // Moves as BufferOffset moves
+	globus_off_t       BufferLength;   // Moves as BufferOffset moves
+	struct stor_info * StorInfo;
+} stor_buffer_t;
+
+typedef struct stor_info {
+	globus_gfs_operation_t       Operation;
+	globus_gfs_transfer_info_t * TransferInfo;
+	ds3_client                 * Client;
+	char                       * Bucket;
+	char                       * Object;
+	int                          Started;
+	globus_result_t              Result;
+	globus_size_t                BlockSize;
+
+	pthread_mutex_t              Mutex;
+	pthread_cond_t               Cond;
+
+	uint64_t                     Offset; // Sanity check only
+	globus_bool_t                Eof;
+
+	int OptConnCnt;
+	int ConnChkCnt;
+	int CurConnCnt;
+
+	globus_list_t * AllBufferList;
+	globus_list_t * ReadyBufferList;
+	globus_list_t * FreeBufferList;
+
+	struct ds3_callout {
+		stor_buffer_t * Buffer;
+		globus_off_t    NeededOffset;
+	} Ds3Callout;
+
+} stor_info_t;
 
 void
 stor(ds3_client                 * Client, 
