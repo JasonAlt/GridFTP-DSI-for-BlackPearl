@@ -64,11 +64,11 @@
 #include "markers.h"
 
 void
-retr_ds3_gridftp_callback(globus_gfs_operation_t Operation,
-                          globus_result_t        Result,
-                          globus_byte_t        * Buffer,
-                          globus_size_t          Length,
-                          void                 * UserArg)
+retr_gridftp_callout(globus_gfs_operation_t Operation,
+                     globus_result_t        Result,
+                     globus_byte_t        * Buffer,
+                     globus_size_t          Length,
+                     void                 * UserArg)
 {
 	retr_info_t * retr_info = UserArg;
 
@@ -178,7 +178,7 @@ retr_ds3_callout(void * ReadyBuffer,
 			                                              cpy_length,
 			                                              retr_info->Offset + buf_offset,
 			                                              0,
-			                                              retr_ds3_gridftp_callback,
+			                                              retr_gridftp_callout,
 			                                              retr_info);
 
 			if (result)
