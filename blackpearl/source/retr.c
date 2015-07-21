@@ -215,6 +215,21 @@ retr_wait_for_gridftp(retr_info_t * RetrInfo)
 	pthread_mutex_unlock(&RetrInfo->Mutex);
 }
 
+void
+retr_destroy_info(retr_info_t * RetrInfo)
+{
+	if (RetrInfo)
+	{
+		if (RetrInfo->Object) free(RetrInfo->Object);
+		if (RetrInfo->Bucket) free(RetrInfo->Bucket);
+		pthread_mutex_destroy(&RetrInfo->Mutex);
+		pthread_cond_destroy(&RetrInfo->Cond);
+		globus_list_free(RetrInfo->FreeBufferList);
+		globus_list_destroy_all(RetrInfo->AllBufferList, free);
+		free(RetrInfo);
+	}
+}
+
 void *
 retr_thread(void * UserArg)
 {
@@ -234,13 +249,7 @@ retr_thread(void * UserArg)
 
 	if (!result) result = retr_info->Result;
 	globus_gridftp_server_finished_transfer(retr_info->Operation, result);
-	pthread_mutex_destroy(&retr_info->Mutex);
-	pthread_cond_destroy(&retr_info->Cond);
-	free(retr_info->Bucket);
-	free(retr_info->Object);
-	globus_list_free(retr_info->FreeBufferList);
-	globus_list_destroy_all(retr_info->AllBufferList, free);
-	free(retr_info);
+	retr_destroy_info(retr_info);
 
 	return NULL;
 }
@@ -300,12 +309,7 @@ retr(ds3_client                 * Client,
 	{
 		result = GlobusGFSErrorSystemError("Launching get object thread", rc);
 		globus_gridftp_server_finished_transfer(Operation, result);
-
-		pthread_mutex_destroy(&retr_info->Mutex);
-		pthread_cond_destroy(&retr_info->Cond);
-		free(retr_info->Bucket);
-		free(retr_info->Object);
-		free(retr_info);
+		retr_destroy_info(retr_info);
 	}
 
 	if (initted) pthread_attr_destroy(&attr);
