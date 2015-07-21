@@ -61,6 +61,7 @@
 #include "retr.h"
 #include "gds3.h"
 #include "path.h"
+#include "markers.h"
 
 void
 retr_ds3_gridftp_callback(globus_gfs_operation_t Operation,
@@ -135,10 +136,10 @@ retr_get_free_buffer(retr_info_t *  RetrInfo,
 }
 
 size_t
-retr_ds3_callback(void * ReadyBuffer,
-                  size_t Length,
-                  size_t Nmemb,
-                  void * UserArg)
+retr_ds3_callout(void * ReadyBuffer,
+                 size_t Length,
+                 size_t Nmemb,
+                 void * UserArg)
 {
 	globus_result_t result      = GLOBUS_SUCCESS;
 	retr_info_t   * retr_info   = UserArg;
@@ -147,7 +148,7 @@ retr_ds3_callback(void * ReadyBuffer,
 	int             buf_offset  = 0;
 	int             cpy_length  = 0;
 
-	GlobusGFSName(retr_ds3_callback);
+	GlobusGFSName(retr_ds3_callout);
 
 	pthread_mutex_lock(&retr_info->Mutex);
 	{
@@ -186,6 +187,11 @@ retr_ds3_callback(void * ReadyBuffer,
 				rc = -1;
 				goto cleanup;
 			}
+
+			/* Update perf markers */
+			markers_update_perf_markers(retr_info->Operation, 
+			                            retr_info->Offset + buf_offset, 
+			                            cpy_length);
 
 			retr_info->Offset += cpy_length;
 			buf_offset        += cpy_length;
@@ -241,7 +247,7 @@ retr_thread(void * UserArg)
 	                                 retr_info->Object,
 	                                 0,    /* Offset */
 	                                 NULL, /* JobID  */
-	                                 retr_ds3_callback,
+	                                 retr_ds3_callout,
 	                                 retr_info);
 
 	if (!result)
