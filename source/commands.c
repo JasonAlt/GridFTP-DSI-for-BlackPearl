@@ -1,7 +1,7 @@
 /*
  * University of Illinois/NCSA Open Source License
  *
- * Copyright © 2015 NCSA.  All rights reserved.
+ * Copyright 2015 NCSA.  All rights reserved.
  *
  * Developed by:
  *
@@ -53,9 +53,31 @@
  * Local includes
  */
 #include "commands.h"
+#include "stage.h"
 #include "path.h"
 #include "gds3.h"
 #include "cksm.h"
+
+globus_result_t
+commands_init(globus_gfs_operation_t Operation)
+{
+	GlobusGFSName(commands_init);
+
+	globus_result_t result = globus_gridftp_server_add_command(
+	                 Operation,
+	                 "SITE STAGE",
+	                 GLOBUS_GFS_HPSS_CMD_SITE_STAGE,
+	                 4,
+	                 4,
+	                 "SITE STAGE <sp> timeout <sp> path",
+	                 GLOBUS_TRUE,
+	                 GFS_ACL_ACTION_READ);
+
+	if (result != GLOBUS_SUCCESS)
+		return GlobusGFSErrorWrapFailed("Failed to add custom 'SITE STAGE' command", result);
+
+	return GLOBUS_SUCCESS;
+}
 
 void
 commands_mkdir(globus_gfs_operation_t      Operation,
@@ -210,6 +232,10 @@ commands_run(globus_gfs_operation_t      Operation,
 
     case GLOBUS_GFS_CMD_CKSM:
 		cksm(Operation, CommandInfo, Client, Callback);
+		break;
+
+	case GLOBUS_GFS_HPSS_CMD_SITE_STAGE:
+		stage(Operation, CommandInfo, Client, Callback);
 		break;
 
 	case GLOBUS_GFS_CMD_SITE_UTIME:       // No S3/DS3 support (need X attributes)

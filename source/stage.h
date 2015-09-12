@@ -1,7 +1,7 @@
 /*
  * University of Illinois/NCSA Open Source License
  *
- * Copyright Â© 2015 NCSA.  All rights reserved.
+ * Copyright © 2015 NCSA.  All rights reserved.
  *
  * Developed by:
  *
@@ -38,8 +38,8 @@
  * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS WITH THE SOFTWARE.
  */
-#ifndef HPSS_DSI_COMMANDS_H
-#define HPSS_DSI_COMMANDS_H
+#ifndef BLACKPEARL_DSI_STAGE_H
+#define BLACKPEARL_DSI_STAGE_H
 
 /*
  * Globus includes
@@ -47,26 +47,22 @@
 #include <globus_gridftp_server.h>
 
 /*
- * DS3 includes
+ * Local includes
  */
-#include <ds3.h>
+#include "commands.h"
+#include "stage.h"
 
-enum {
-	GLOBUS_GFS_HPSS_CMD_SITE_STAGE = GLOBUS_GFS_MIN_CUSTOM_CMD,
-};
-
-globus_result_t
-commands_init(globus_gfs_operation_t Operation);
-
-typedef void (*commands_callback)(globus_gfs_operation_t  Operation,
-                                  globus_result_t         Result,
-                                  char                  * CommandResponse);
+typedef enum {
+	STAGE_FILE_RESIDENT,
+	STAGE_FILE_TAPE_ONLY,
+	STAGE_FILE_ARCHIVED,
+} stage_file_residency;
 
 void
-commands_run(globus_gfs_operation_t      Operation,
-             globus_gfs_command_info_t * CommandInfo,
-             ds3_client                * Client,
-             commands_callback           Callback);
+stage(globus_gfs_operation_t      Operation,
+      globus_gfs_command_info_t * CommandInfo,
+      ds3_client                * Client,
+      commands_callback           Callback);
 
-#endif /* HPSS_DSI_COMMANDS_H */
+#endif /* BLACKPEARL_DSI_STAGE_H */
 
