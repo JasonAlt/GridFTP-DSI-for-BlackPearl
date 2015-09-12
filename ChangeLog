@@ -1,0 +1,6 @@
+**** Have not yet cut a release ****
+
+Sat Sep 12 22:51:55 UTC 2015
+ - Updated README with known issues
+ - Fixed memory bug related to partial stats
+ - Added to README that directory listings do not include '.' and '..'

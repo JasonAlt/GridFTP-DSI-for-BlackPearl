@@ -6,22 +6,20 @@ DSI provides a POSIX-like view of the object store.
 
 Known Issues (Ordered by severity)
 ==================================
-1) There is a memory bug with partial stats so partial stats are disabled.
-   Partial stats allow for long (> 200 entries) directory listings. With this
-   disabled, directory listings will be truncated to 200 entries.
+1) Staging does not work.
 
-2) Staging does not work.
+2) Chunk transfers do not work.
 
-3) Chunk transfers do not work.
+3) Modification times are not supported as a sync method.
 
-4) Modification times are not supported as a sync method.
+4) Checksums can not be used as a sync method.
 
-5) Checksums can not be used as a sync method.
-
-6) Checksums can not be stored; checksums must always be recomputed which may require
+5) Checksums can not be stored; checksums must always be recomputed which may require
     a tape mount.
 
-7) Listing of '/' will be truncated at STAT_ENTRIES_PER_REPLY entries.
+6) Listing of '/' will be truncated at STAT_ENTRIES_PER_REPLY entries.
+
+7) Directory listings other than '/' do not have '.' and '..' entries.
 
 8) A 'directory' is created either because there is a zero-length object with
    '/' appended or the directory can exist because it is a prefix of an object.
@@ -51,3 +49,4 @@ Known Issues (Ordered by severity)
     checksum on the fly. This functionality is seldom used (never used by the
     Globus transfer service).
 
+18) You can not set permissions

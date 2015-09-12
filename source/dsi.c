@@ -111,8 +111,21 @@ dsi_init(globus_gfs_operation_t      Operation,
 	ds3_get_service_response * response = NULL;
 	result = gds3_get_service(bp_client, &response);
 	ds3_free_service_response(response);
+	if (result)
+		goto cleanup;
+
+	result = commands_init(Operation);
 
 cleanup:
+	/*
+	 * Inform the server that we are done. If we do not pass in a username, the
+	 * server will use the name we mapped to with GSI. If we do not pass in a
+	 * home directory, the server will (1) look it up if we are root or
+	 * (2) leave it as the unprivileged user's home directory.
+	 *
+	 * As far as I can tell, the server keeps a pointer to home_directory and frees
+	 * it when it is done.
+	 */
 	globus_gridftp_server_finished_session_start(Operation,
 	                                             result,
 	                                             bp_client, // Session variable
@@ -250,8 +263,8 @@ dsi_stat(globus_gfs_operation_t   Operation,
 	 * Directory listing.
 	 */
 	char * marker = NULL;
-// XXX partial stats not working on subdirectories due to unknown memory bug
-//	do {
+
+	do {
 		globus_gfs_stat_t gfs_stat_array[STAT_ENTRIES_PER_REPLY];
 		int stat_count;
 
@@ -262,16 +275,17 @@ dsi_stat(globus_gfs_operation_t   Operation,
 		                                &stat_count,
 		                                &marker);
 
-//		globus_gridftp_server_finished_stat_partial(Operation,
-//		                                            GLOBUS_SUCCESS,
-//		                                            gfs_stat_array,
-//		                                            stat_count);
-//		stat_destroy_array(gfs_stat_array, stat_count);
+		if (marker)
+			globus_gridftp_server_finished_stat_partial(Operation,
+			                                            GLOBUS_SUCCESS,
+			                                            gfs_stat_array,
+			                                            stat_count);
+		else
+			globus_gridftp_server_finished_stat(Operation, result, gfs_stat_array, stat_count);
 
-//	} while (marker);
+		stat_destroy_array(gfs_stat_array, stat_count);
 
-	globus_gridftp_server_finished_stat(Operation, result, gfs_stat_array, stat_count);
-	stat_destroy_array(gfs_stat_array, stat_count);
+	} while (marker);
 }
 
 globus_gfs_storage_iface_t blackpearl_dsi_iface =
