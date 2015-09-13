@@ -13,7 +13,7 @@ Known Issues (Ordered by severity)
 3) Checksums can not be used as a sync method.
 
 4) Checksums can not be stored; checksums must always be recomputed which may require
-    a tape mount.
+   a tape mount.
 
 5) Listing of '/' will be truncated at STAT_ENTRIES_PER_REPLY entries.
 
