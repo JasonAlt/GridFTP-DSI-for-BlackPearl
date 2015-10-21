@@ -1,7 +1,7 @@
 /*
  * University of Illinois/NCSA Open Source License
  *
- * Copyright  2015 NCSA.  All rights reserved.
+ * Copyright © 2015 NCSA.  All rights reserved.
  *
  * Developed by:
  *
@@ -38,7 +38,6 @@
  * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS WITH THE SOFTWARE.
  */
-
 
 /*
  * System includes

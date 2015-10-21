@@ -1,7 +1,7 @@
 /*
  * University of Illinois/NCSA Open Source License
  *
- * Copyright 2015 NCSA.  All rights reserved.
+ * Copyright © 2015 NCSA.  All rights reserved.
  *
  * Developed by:
  *
@@ -230,7 +230,7 @@ commands_run(globus_gfs_operation_t      Operation,
 		commands_unlink(Operation, CommandInfo, Client, Callback);
 		break;
 
-    case GLOBUS_GFS_CMD_CKSM:
+	case GLOBUS_GFS_CMD_CKSM:
 		cksm(Operation, CommandInfo, Client, Callback);
 		break;
 
@@ -245,19 +245,19 @@ commands_run(globus_gfs_operation_t      Operation,
 	case GLOBUS_GFS_CMD_SITE_CHGRP:       // No S3/DS3 support
 	case GLOBUS_GFS_CMD_SITE_SYMLINKFROM: // No S3/DS3 support
 	case GLOBUS_GFS_CMD_SITE_SYMLINK:     // No S3/DS3 support
-    case GLOBUS_GFS_CMD_SITE_AUTHZ_ASSERT:
-    case GLOBUS_GFS_CMD_SITE_RDEL:
-    case GLOBUS_GFS_CMD_SITE_DSI:
-    case GLOBUS_GFS_CMD_SITE_SETNETSTACK:
-    case GLOBUS_GFS_CMD_SITE_SETDISKSTACK:
-    case GLOBUS_GFS_CMD_SITE_CLIENTINFO:
-    case GLOBUS_GFS_CMD_DCSC:
-    case GLOBUS_GFS_CMD_HTTP_PUT:
-    case GLOBUS_GFS_CMD_HTTP_GET:
-    case GLOBUS_GFS_CMD_HTTP_CONFIG:
-    case GLOBUS_GFS_CMD_TRNC:
-    case GLOBUS_GFS_CMD_SITE_TASKID:
-    default:
-        return Callback(Operation, GlobusGFSErrorGeneric("Not Supported"), NULL);
+	case GLOBUS_GFS_CMD_SITE_AUTHZ_ASSERT:
+	case GLOBUS_GFS_CMD_SITE_RDEL:
+	case GLOBUS_GFS_CMD_SITE_DSI:
+	case GLOBUS_GFS_CMD_SITE_SETNETSTACK:
+	case GLOBUS_GFS_CMD_SITE_SETDISKSTACK:
+	case GLOBUS_GFS_CMD_SITE_CLIENTINFO:
+	case GLOBUS_GFS_CMD_DCSC:
+	case GLOBUS_GFS_CMD_HTTP_PUT:
+	case GLOBUS_GFS_CMD_HTTP_GET:
+	case GLOBUS_GFS_CMD_HTTP_CONFIG:
+	case GLOBUS_GFS_CMD_TRNC:
+	case GLOBUS_GFS_CMD_SITE_TASKID:
+	default:
+		return Callback(Operation, GlobusGFSErrorGeneric("Not Supported"), NULL);
     }
 }

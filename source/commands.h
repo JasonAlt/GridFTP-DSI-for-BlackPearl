@@ -1,7 +1,7 @@
 /*
  * University of Illinois/NCSA Open Source License
  *
- * Copyright Â© 2015 NCSA.  All rights reserved.
+ * Copyright © 2015 NCSA.  All rights reserved.
  *
  * Developed by:
  *
@@ -38,6 +38,7 @@
  * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS WITH THE SOFTWARE.
  */
+
 #ifndef HPSS_DSI_COMMANDS_H
 #define HPSS_DSI_COMMANDS_H
 

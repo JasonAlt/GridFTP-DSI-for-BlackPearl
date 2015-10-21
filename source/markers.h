@@ -1,7 +1,7 @@
 /*
  * University of Illinois/NCSA Open Source License
  *
- * Copyright © 2014-2015 NCSA.  All rights reserved.
+ * Copyright © 2015 NCSA.  All rights reserved.
  *
  * Developed by:
  *
@@ -44,8 +44,8 @@
  * be available depending upon what is installed on the system.
  */
 
-#ifndef HPSS_DSI_MARKERS_H
-#define HPSS_DSI_MARKERS_H
+#ifndef BLACKPEARL_DSI_MARKERS_H
+#define BLACKPEARL_DSI_MARKERS_H
 
 /*
  * Globus includes.
@@ -65,4 +65,4 @@ markers_update_restart_markers(globus_gfs_operation_t Operation,
 int
 markers_restart_supported();
 
-#endif /* HPSS_DSI_MARKERS_H */
+#endif /* BLACKPEARL_DSI_MARKERS_H */
