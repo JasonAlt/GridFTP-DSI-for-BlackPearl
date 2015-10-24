@@ -415,7 +415,7 @@ stat_entries(ds3_client        * Client,
 
 		for (i = State->_index; i < State->_bucket_response->num_objects; i++, State->_index++)
 		{
-			if (strcmp(State->_bucket_response->objects[i].name->value, State->_object_name) == 0)
+			if (State->_object_name && strcmp(State->_bucket_response->objects[i].name->value, State->_object_name) == 0)
 				continue;
 
 			char * last_modified = NULL;
