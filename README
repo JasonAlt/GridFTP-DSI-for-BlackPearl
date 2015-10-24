@@ -16,37 +16,35 @@ Known Issues (Ordered by severity)
 4) Checksums can not be stored; checksums must always be recomputed which may
    require a tape mount.
 
-5) Listing of '/' will be truncated at STAT_ENTRIES_PER_REPLY entries.
+5) Directory link counts for listings are not calculated because they are slow.
 
-6) Directory listings other than '/' do not have '.' and '..' entries.
-
-7) A 'directory' is created either because there is a zero-length object with
+6) A 'directory' is created either because there is a zero-length object with
    '/' appended or the directory can exist because it is a prefix of an object.
    In the latter case, 'MKD <dir>' will succeed.
  
-8) Related to (3) above, 'RMD <dir>' can succeed if the object with '/' appended
+7) Related to (3) above, 'RMD <dir>' can succeed if the object with '/' appended
    exists regardless of if other objects have that prefix. After the RMD
    succeeds, the directory will still show in listings due to the objects with
    the prefix.
 
-9) Directories that exist due to a common_prefix will disappear when the object
+8) Directories that exist due to a common_prefix will disappear when the object
    with the common_prefix is removed.
 
-10) Directory entry counts are not checked before deleting an object that
+9) Directory entry counts are not checked before deleting an object that
     represents a directory.
 
-11) Inodes in directory listings are not supported.
+10) Inodes in directory listings are not supported.
 
-12) UIDs in directory listings are not supported.
+11) UIDs in directory listings are not supported.
 
-13) GIDs in directory listings are not supported.
+12) GIDs in directory listings are not supported.
 
-14) Directory link counts in lists are not supported.
+13) Directory link counts in lists are not supported.
 
-15) Modification times are not supported in directory listings.
+14) Modification times are not supported in directory listings.
 
-16) Partial CKSMs are disabled. This is could likely be fixed by generating the
+15) Partial CKSMs are disabled. This is could likely be fixed by generating the
     checksum on the fly. This functionality is seldom used (never used by the
     Globus transfer service).
 
-17) You can not set permissions
+16) You can not set permissions

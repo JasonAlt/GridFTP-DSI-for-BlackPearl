@@ -111,311 +111,355 @@ stat_populate(char              * Name,
 
 // Directory link count not supported
 globus_result_t
-stat_get_link_count(ds3_client * Client, char * Path, int * LinkCount)
+stat_get_link_count(ds3_client * Client,
+                    char       * BucketName,
+                    char       * Prefix,
+                    int        * LinkCount)
 {
-*LinkCount = 34;
-return GLOBUS_SUCCESS;
-// XXX
-/*
-    boost::scoped_ptr<DS3::Directory> dir(new DS3::Directory(C, Path));
-    ErrorCode::Prototype ec = dir->Opendir();
-    if (ec) return ec;
-    LinkCount = 0;
-    std::string entry;
-    while (!(ec = dir->ReadNextEntry(entry)) && entry.size()) {LinkCount++;}
-    if (!ec)
-        ec = dir->Closedir();
-    return ec;
-*/
-}
-
-globus_result_t
-stat_object(ds3_client * Client, char * Pathname, globus_gfs_stat_t * GFSStat)
-{
+	ds3_get_bucket_response * get_bucket_response;
 	globus_result_t result = GLOBUS_SUCCESS;
-	char          * bucket_name = NULL;
-	char          * object_name = NULL;
-	int             i;
-	int             link_count;
-	ds3_get_service_response * get_service_response = NULL;
-	ds3_get_bucket_response  * get_bucket_response  = NULL;
+	char          * marker = NULL;
 
-	GlobusGFSName(stat_object);
+	*LinkCount = 0;
 
-	/* Start by splitting the path into its two parts. */
-	path_split(Pathname, &bucket_name, &object_name);
-
-	/* Fetch the service response, we'll need it soon. */
-	result = gds3_get_service(Client, &get_service_response);
-	if (result != GLOBUS_SUCCESS)
-		goto cleanup;
-
-	/* No object_name means it is in '/' */
-	if (!object_name)
-	{
-		/* No bucket_name means it is '/' */
-		if (!bucket_name)
-		{
-			result = stat_populate("/",
-			                       S_IFDIR,
-			                       get_service_response->num_buckets + 2,
-			                       1024,
-			                       ds3_str_value(get_service_response->owner->name),
-			                       NULL,
-			                       GFSStat);
-			goto cleanup;
-		}
-
-		/* It is in '/' */
-		for (i = 0; i < get_service_response->num_buckets; i++)
-		{
-			if (strcmp(bucket_name, ds3_str_value(get_service_response->buckets[i].name)) == 0)
-			{
-				result = stat_get_link_count(Client, Pathname, &link_count);
-				if (result != GLOBUS_SUCCESS)
-					goto cleanup;
-
-				result = stat_populate(bucket_name,
-				                       S_IFDIR,
-				                       link_count,
-				                       1024,
-				                       ds3_str_value(get_service_response->owner->name),
-				                       ds3_str_value(get_service_response->buckets[i].creation_date),
-				                       GFSStat);
-				goto cleanup;
-			}
-		}
-		
-		/* It wasn't in '/' */
-		result = GlobusGFSErrorGeneric("No such file or directory");
-		goto cleanup;
-	}
-
-	/* It must be in '/<bucket>/' */
-	char * marker = NULL;
 	do {
 		result = gds3_get_bucket(Client,
-		                         bucket_name,
+		                         BucketName,
 		                         &get_bucket_response,
 		                         "/", /* Delimiter */
-		                         object_name,
+		                         Prefix,
 		                         marker,
 		                         0);
 
-		if (result)
-			goto cleanup;
+		if (result) return result;
 
-		/* Check if it is a directory */
-		for (i = 0; i < get_bucket_response->num_common_prefixes; i++)
-		{
-			if (strncmp(object_name,
-			            ds3_str_value(get_bucket_response->common_prefixes[i]),
-			            ds3_str_size(get_bucket_response->common_prefixes[i])-1) == 0)
-			{
-				result = stat_get_link_count(Client, Pathname, &link_count);
-				if (result)
-					goto cleanup;
+		*LinkCount += get_bucket_response->num_common_prefixes + 
+		              get_bucket_response->num_objects;
+	} while (marker);
 
-				result = stat_populate(basename(object_name),
-				                       S_IFDIR,
-				                       link_count,
-				                       1024,
-				                       ds3_str_value(get_service_response->owner->name),
-				                       NULL,
-				                       GFSStat);
-				goto cleanup;
-			}
-		}
-
-		/* Check if it is a file */
-		for (i = 0; i < get_bucket_response->num_objects; i++)
-		{
-			if (strcmp(object_name, ds3_str_value(get_bucket_response->objects[i].name)) == 0)
-			{
-				char * last_modified = NULL;
-				if (get_bucket_response->objects[i].last_modified)
-					last_modified = ds3_str_value(get_bucket_response->objects[i].last_modified);
-				result = stat_populate(basename(object_name),
-				                       S_IFREG,
-				                       1,
-				                       get_bucket_response->objects[i].size,
-				                       ds3_str_value(get_bucket_response->objects[i].owner->name),
-				                       last_modified,
-				                       GFSStat);
-				goto cleanup;
-			}
-		}
-
-		if (marker) free(marker);
-		marker = NULL;
-		if (get_bucket_response->is_truncated)
-			marker = strdup(ds3_str_value(get_bucket_response->next_marker));
-	} while (marker > 0);
-
-	result = GlobusGFSErrorGeneric("No such file or directory");
-
-cleanup:
-	ds3_free_service_response(get_service_response);
 	ds3_free_bucket_response(get_bucket_response);
-	if (bucket_name)
-		free(bucket_name);
-	if (object_name)
-		free(object_name);
-	return result;
+
+	return GLOBUS_SUCCESS;
+}
+
+void
+stat_init_state(stat_state_t * State)
+{
+	memset(State, 0, sizeof(stat_state_t));
+}
+
+int
+stat_is_complete(stat_state_t * State)
+{
+	return State->_complete;
+}
+
+void
+stat_destroy_state(stat_state_t * State)
+{
+	if (State->_service_response) ds3_free_service_response(State->_service_response);
+	if (State->_bucket_response)  ds3_free_bucket_response(State->_bucket_response);
+	if (State->_bucket_name)      free(State->_bucket_name);
+	if (State->_object_name)      free(State->_object_name);
+	if (State->_marker)           free(State->_marker);
 }
 
 globus_result_t
-stat_directory_entries(ds3_client        *  Client,
-                       char              *  Path,
-                       int                  MaxEntries,
-                       globus_gfs_stat_t *  GFSStatArray,
-                       int               *  CountOut,
-                       char              ** Marker)
+stat_entries(ds3_client        * Client,
+             char              * Path,
+             int                 FileOnly,
+             int                 MaxEntries,
+             globus_gfs_stat_t * GFSStatArray,
+             int               * CountOut,
+             stat_state_t      * State)
 {
 	globus_result_t result = GLOBUS_SUCCESS;
-	char          * bucket_name = NULL;
-	char          * object_name = NULL;
-	char          * prefix      = NULL;
-	ds3_get_service_response * get_service_response = NULL;
-	ds3_get_bucket_response  * get_bucket_response  = NULL;
-	int i;
-	int link_count;
-	int prefix_len = 0;
+	int i = 0;
+	int expanding_search = 0;
 
-	GlobusGFSName(stat_directory_entries);
+	GlobusGFSName(stat_entries);
 
-	/* Start by splitting the path into its two parts. */
-	path_split(Path, &bucket_name, &object_name);
+	if (!State->_bucket_name && !State->_object_name)
+		path_split(Path, &State->_bucket_name, &State->_object_name);
+
+	if (!State->_service_response)
+	{
+		result = gds3_get_service(Client, &State->_service_response);
+		if (result != GLOBUS_SUCCESS)
+			return result;
+	}
+
 	*CountOut = 0;
 
-	/* Get Service */
-	result = gds3_get_service(Client, &get_service_response);
-	if (result != GLOBUS_SUCCESS)
-		goto cleanup;
-
-	if (!bucket_name)
+	/* No bucket_name means it _is_ '/' */
+	if (!State->_bucket_name)
 	{
-		if ((get_service_response->num_buckets + 2) > MaxEntries)
+		if (FileOnly)
 		{
-// XXX limit on number of buckets
-			result = GlobusGFSErrorGeneric("Too many buckets!");
-			goto cleanup;
-		}
-
-		result = stat_populate(".",
-		                       S_IFDIR,
-		                       get_service_response->num_buckets + 2,
-		                       1024,
-		                       ds3_str_value(get_service_response->owner->name),
-		                       NULL, // XXX no modify time
-		                       &GFSStatArray[*CountOut]);
-		if (result != GLOBUS_SUCCESS)
-			goto cleanup;
-		(*CountOut)++;
-
-		result = stat_populate("..",
-		                       S_IFDIR,
-		                       get_service_response->num_buckets + 2,
-		                       1024,
-		                       ds3_str_value(get_service_response->owner->name),
-		                       NULL, // XXX no modify time
-		                       &GFSStatArray[*CountOut]);
-		if (result != GLOBUS_SUCCESS)
-			goto cleanup;
-		(*CountOut)++;
-
-		for (i = 0; i < get_service_response->num_buckets; i++)
-		{
-			result = stat_get_link_count(Client, Path, &link_count);
-			if (result != GLOBUS_SUCCESS)
-				goto cleanup;
-
-			result = stat_populate(ds3_str_value(get_service_response->buckets[i].name),
+			/* Return a stat of only '/'. */
+			result = stat_populate("/",
 			                       S_IFDIR,
-			                       link_count,
+			                       State->_service_response->num_buckets + 2,
 			                       1024,
-			                       ds3_str_value(get_service_response->owner->name),
-			                       ds3_str_value(get_service_response->buckets[i].creation_date),
-			                       &GFSStatArray[*CountOut]);
-			if (result != GLOBUS_SUCCESS)
-				goto cleanup;
-			(*CountOut)++;
+			                       ds3_str_value(State->_service_response->owner->name),
+			                       NULL,
+			                       &GFSStatArray[(*CountOut)++]);
+			State->_complete = 1;
+			return result;
+		} else
+		{
+			/* Return the contents of '/'. */
+			if (State->_index++ == 0)
+			{
+				result = stat_populate(".",
+				                       S_IFDIR,
+				                       State->_service_response->num_buckets + 2,
+				                       1024,
+				                       ds3_str_value(State->_service_response->owner->name),
+				                       NULL, // XXX no modify time
+				                       &GFSStatArray[(*CountOut)++]);
+
+				if (result != GLOBUS_SUCCESS || *CountOut == MaxEntries)
+					return result;
+			}
+
+			if (State->_index++ == 1)
+			{
+				result = stat_populate("..",
+				                       S_IFDIR,
+				                       State->_service_response->num_buckets + 2,
+				                       1024,
+				                       ds3_str_value(State->_service_response->owner->name),
+				                       NULL, // XXX no modify time
+				                       &GFSStatArray[(*CountOut)++]);
+
+				if (State->_service_response->num_buckets == 0)
+					State->_complete = 1;
+
+				if (result != GLOBUS_SUCCESS || *CountOut == MaxEntries)
+					return result;
+			}
+
+			for (i = State->_index-2;
+			     i < State->_service_response->num_buckets && *CountOut < MaxEntries;
+			     i++)
+			{
+				result = stat_populate(ds3_str_value(State->_service_response->buckets[i].name),
+				                       S_IFDIR,
+				                       2,
+				                       1024,
+				                       ds3_str_value(State->_service_response->owner->name),
+				                       ds3_str_value(State->_service_response->buckets[i].creation_date),
+				                       &GFSStatArray[(*CountOut)++]);
+				if (result != GLOBUS_SUCCESS)
+					return result;
+			}
+			State->_complete = (i == State->_service_response->num_buckets);
+			return result;
 		}
-		goto cleanup;
 	}
 
-	/*
-	 * Get Bucket
-	 */
-	if (object_name)
+	/* No object_name means it is _in_ '/' */
+	if (!State->_object_name && FileOnly)
 	{
-		prefix = malloc(strlen(object_name) + 2);
-		sprintf(prefix, "%s/", object_name);
-		prefix_len = strlen(prefix);
+		for (i = 0;
+		     i < State->_service_response->num_buckets;
+		     i++)
+		{
+			if (strcmp(State->_bucket_name, ds3_str_value(State->_service_response->buckets[i].name)) == 0)
+			{
+				result = stat_populate(ds3_str_value(State->_service_response->buckets[i].name),
+				                       S_IFDIR,
+				                       2,
+				                       1024,
+				                       ds3_str_value(State->_service_response->owner->name),
+				                       ds3_str_value(State->_service_response->buckets[i].creation_date),
+				                       &GFSStatArray[(*CountOut)++]);
+				State->_complete = 1;
+				return result;
+			}
+		}
+
+		return GlobusGFSErrorGeneric("No such file or directory");
 	}
 
-	result = gds3_get_bucket(Client,
-	                         bucket_name,
-	                         &get_bucket_response,
-	                         "/", /* Delimiter */
-	                         prefix,
-	                         *Marker,
-	                         MaxEntries);
-
-	if (result != GLOBUS_SUCCESS)
-		goto cleanup;
-
-	/* Check if it is a directory */
-	for (i = 0; i < get_bucket_response->num_common_prefixes; i++)
+	/* Let's find this object. */
+	if (State->_object_name && State->_object_name[strlen(State->_object_name-1)] != '/')
 	{
-		link_count = 1; /* XXX */
-		char * name = strdup(ds3_str_value(get_bucket_response->common_prefixes[i]));
-		name[strlen(name)-1] = '\0';
-		result = stat_populate(name + prefix_len,
-		                       S_IFDIR,
-		                       link_count,
-		                       1024,
-		                       ds3_str_value(get_service_response->owner->name),
-		                       NULL, // XXX no modify time
-		                       &GFSStatArray[*CountOut]);
-		free(name);
-		if (result != GLOBUS_SUCCESS)
-			goto cleanup;
-		(*CountOut)++;
+		do
+		{
+			/* Get the next response. */
+			if (!State->_bucket_response)
+			{
+				result = gds3_get_bucket(Client,
+				                         State->_bucket_name,
+				                         &State->_bucket_response,
+				                         "/", /* Delimiter */
+				                         State->_object_name,
+				                         State->_marker,
+				                         MaxEntries);
+				if (result)
+					return result;
+			}
+
+			/* If it is an object... */
+			for (i = 0; i < State->_bucket_response->num_objects; i++)
+			{
+				if (strcmp(State->_object_name, ds3_str_value(State->_bucket_response->objects[i].name)) == 0)
+				{
+					char * last_modified = NULL;
+					if (State->_bucket_response->objects[i].last_modified)
+						last_modified = ds3_str_value(State->_bucket_response->objects[i].last_modified);
+					result = stat_populate(basename(State->_object_name),
+					                       S_IFREG,
+					                       1,
+					                       State->_bucket_response->objects[i].size,
+					                       ds3_str_value(State->_bucket_response->objects[i].owner->name),
+					                       last_modified,
+					                       &GFSStatArray[(*CountOut)++]);
+					State->_complete = 1;
+					return result;
+				}
+			}
+
+			/* If it is a directory... */
+			for (i = 0; i < State->_bucket_response->num_common_prefixes; i++)
+			{
+				if (strncmp(State->_object_name,
+				            ds3_str_value(State->_bucket_response->common_prefixes[i]),
+				            ds3_str_size(State->_bucket_response->common_prefixes[i])-1) == 0 &&
+				    State->_bucket_response->common_prefixes[i]->value[
+				                      State->_bucket_response->common_prefixes[i]->size-1] == '/')
+				{
+					/* If we do not need to expand the directory... */
+					if (FileOnly)
+					{
+						result = stat_populate(basename(State->_object_name),
+						                       S_IFDIR,
+						                       2,
+						                       1024,
+						                       ds3_str_value(State->_service_response->owner->name),
+						                       NULL,
+						                       &GFSStatArray[(*CountOut)++]);
+						State->_complete = 1;
+						return result;
+					} else
+					{
+						char * new_object_name = malloc(strlen(State->_object_name)+2);
+						sprintf(new_object_name, "%s/", State->_object_name);
+						free(State->_object_name);
+						State->_object_name = new_object_name;
+
+						if (State->_bucket_response)
+							ds3_free_bucket_response(State->_bucket_response);
+						State->_bucket_response = NULL;
+						if (State->_marker)
+							free(State->_marker);
+						State->_index = 0;
+
+						expanding_search = 1;
+						break;
+					}
+				}
+			}
+		} while (State->_marker);
+
+		/* We could not find it. */
+		if (!expanding_search)
+			return GlobusGFSErrorGeneric("No such file or directory");
 	}
 
-	/* Check if it is a file */
-	for (i = 0; i < get_bucket_response->num_objects; i++)
+	do
 	{
-		if (prefix && strcmp(ds3_str_value(get_bucket_response->objects[i].name), prefix) == 0)
-			continue;
-		char * last_modified = NULL;
-		if (get_bucket_response->objects[i].last_modified)
-			last_modified = ds3_str_value(get_bucket_response->objects[i].last_modified);
-		result = stat_populate(ds3_str_value(get_bucket_response->objects[i].name) + prefix_len,
-		                       S_IFREG,
-		                       1,
-		                       get_bucket_response->objects[i].size,
-		                       ds3_str_value(get_bucket_response->objects[i].owner->name),
-		                       last_modified,
-		                       &GFSStatArray[*CountOut]);
-		if (result != GLOBUS_SUCCESS)
-			goto cleanup;
-		(*CountOut)++;
-	}
+		/* First pass. */
+		if (!State->_bucket_response && !State->_index)
+		{
+			result = stat_populate(".",
+			                       S_IFDIR,
+			                       2,
+			                       1024,
+			                       ds3_str_value(State->_service_response->owner->name),
+			                       NULL, // XXX no modify time
+			                       &GFSStatArray[(*CountOut)++]);
 
-	if (*Marker) free(*Marker);
-	*Marker = NULL;
-	if (get_bucket_response->is_truncated)
-		*Marker = strdup(ds3_str_value(get_bucket_response->next_marker));
+			if (result != GLOBUS_SUCCESS)
+				return result;
 
-cleanup:
-	ds3_free_service_response(get_service_response);
-	ds3_free_bucket_response(get_bucket_response);
-	if (prefix) free(prefix);
-	if (bucket_name) free(bucket_name);
-	if (object_name) free(object_name);
+			result = stat_populate("..",
+			                       S_IFDIR,
+			                       2,
+			                       1024,
+			                       ds3_str_value(State->_service_response->owner->name),
+			                       NULL, // XXX no modify time
+			                       &GFSStatArray[(*CountOut)++]);
 
+			if (result != GLOBUS_SUCCESS)
+				return result;
+		}
+
+		/* Get the next response. */
+		if (!State->_bucket_response)
+		{
+			result = gds3_get_bucket(Client,
+			                         State->_bucket_name,
+			                         &State->_bucket_response,
+			                         "/", /* Delimiter */
+			                         State->_object_name,
+			                         State->_marker,
+			                         MaxEntries);
+			if (result)
+				return result;
+
+			State->_index = 0;
+		}
+
+		for (i = State->_index; i < State->_bucket_response->num_objects; i++, State->_index++)
+		{
+			if (strcmp(State->_bucket_response->objects[i].name->value, State->_object_name) == 0)
+				continue;
+
+			char * last_modified = NULL;
+			if (State->_bucket_response->objects[i].last_modified)
+				last_modified = ds3_str_value(State->_bucket_response->objects[i].last_modified);
+			result = stat_populate(State->_bucket_response->objects[i].name->value,
+			                       S_IFREG,
+			                       1,
+			                       State->_bucket_response->objects[i].size,
+			                       ds3_str_value(State->_bucket_response->objects[i].owner->name),
+			                       last_modified,
+			                       &GFSStatArray[(*CountOut)++]);
+
+			if (result != GLOBUS_SUCCESS || *CountOut == MaxEntries)
+				return result;
+		}
+
+		for (i = State->_index - State->_bucket_response->num_objects;
+		     i < State->_bucket_response->num_common_prefixes; 
+		     i++, State->_index++)
+		{
+			char * entry = malloc(State->_bucket_response->common_prefixes[i]->size);
+			snprintf(entry,
+			         State->_bucket_response->common_prefixes[i]->size, 
+			         "%s", 
+			         State->_bucket_response->common_prefixes[i]->value);
+			result = stat_populate(entry,
+			                       S_IFDIR,
+			                       2,
+			                       1024,
+			                       ds3_str_value(State->_service_response->owner->name),
+			                       NULL,
+			                       &GFSStatArray[(*CountOut)++]);
+			free(entry);
+			if (result != GLOBUS_SUCCESS || *CountOut == MaxEntries)
+				return result;
+		}
+
+		ds3_free_bucket_response(State->_bucket_response);
+		State->_bucket_response = NULL;
+
+	} while (State->_marker);
+
+	State->_complete = 1;
 	return result;
 }
 

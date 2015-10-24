@@ -51,6 +51,38 @@
  */
 #include <ds3.h>
 
+typedef struct {
+	ds3_get_service_response * _service_response;
+	ds3_get_bucket_response  * _bucket_response;
+	char                     * _bucket_name;
+	char                     * _object_name;
+	char                     * _marker;
+	int                        _index;
+	int                        _complete;
+} stat_state_t;
+
+void
+stat_init_state(stat_state_t * StatState);
+
+int
+stat_is_complete(stat_state_t * StatState);
+
+void
+stat_destroy_state(stat_state_t * StatState);
+
+globus_result_t
+stat_entries(ds3_client        * Client,
+             char              * Path,
+             int                 FileOnly,
+             int                 MaxEntries,
+             globus_gfs_stat_t * GFSStatArray,
+             int               * CountOut,
+             stat_state_t      * State);
+
+void
+stat_destroy_entry_array(globus_gfs_stat_t *, int Count);
+
+#ifndef NOT
 globus_result_t
 stat_object(ds3_client * Client, char * Pathname, globus_gfs_stat_t *);
 
@@ -68,7 +100,7 @@ stat_destroy(globus_gfs_stat_t *);
 
 void
 stat_destroy_array(globus_gfs_stat_t *, int Count);
-
+#endif
 
 #endif /* BLACPEARL_DSI_STAT_H */
 

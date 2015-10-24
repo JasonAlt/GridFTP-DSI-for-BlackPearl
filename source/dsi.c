@@ -233,59 +233,48 @@ dsi_command(globus_gfs_operation_t      Operation,
 	commands_run(Operation, CommandInfo, UserArg, globus_gridftp_server_finished_command);
 }
 
+#define STAT_ENTRIES_PER_REPLY 200
+
 void
 dsi_stat(globus_gfs_operation_t   Operation,
          globus_gfs_stat_info_t * StatInfo,
          void                   * Arg)
 {
 	globus_result_t   result = GLOBUS_SUCCESS;
-	globus_gfs_stat_t gfs_stat;
 	ds3_client      * client = Arg;
+	stat_state_t      state;
+	globus_gfs_stat_t gfs_stat_array[STAT_ENTRIES_PER_REPLY];
+	int               stat_count;
 
 	GlobusGFSName(dsi_stat);
 
-	result = stat_object(client, StatInfo->pathname, &gfs_stat);
-
-	if (result != GLOBUS_SUCCESS || StatInfo->file_only || !S_ISDIR(gfs_stat.mode))
-	{
-		globus_gridftp_server_finished_stat(Operation,
-		                                    result, 
-		                                    &gfs_stat, 
-		                                    result ? 0 : 1);
-		if (!result) stat_destroy(&gfs_stat);
-		return;
-	}
-
-	stat_destroy(&gfs_stat);
-
-#define STAT_ENTRIES_PER_REPLY 200
-	/*
-	 * Directory listing.
-	 */
-	char * marker = NULL;
+	stat_init_state(&state);
 
 	do {
-		globus_gfs_stat_t gfs_stat_array[STAT_ENTRIES_PER_REPLY];
-		int stat_count;
+		result = stat_entries(client,
+		                      StatInfo->pathname,
+		                      StatInfo->file_only,
+		                      STAT_ENTRIES_PER_REPLY,
+		                      gfs_stat_array,
+		                      &stat_count,
+		                      &state);
 
-		result = stat_directory_entries(client,
-		                                StatInfo->pathname,
-		                                STAT_ENTRIES_PER_REPLY,
-		                                gfs_stat_array,
-		                                &stat_count,
-		                                &marker);
-
-		if (marker)
+		if (stat_is_complete(&state) || result != GLOBUS_SUCCESS)
+			globus_gridftp_server_finished_stat(Operation,
+			                                    result,
+			                                    gfs_stat_array,
+			                                    stat_count);
+		else
 			globus_gridftp_server_finished_stat_partial(Operation,
 			                                            GLOBUS_SUCCESS,
 			                                            gfs_stat_array,
 			                                            stat_count);
-		else
-			globus_gridftp_server_finished_stat(Operation, result, gfs_stat_array, stat_count);
 
 		stat_destroy_array(gfs_stat_array, stat_count);
 
-	} while (marker);
+	} while (!stat_is_complete(&state) && result == GLOBUS_SUCCESS);
+
+	stat_destroy_state(&state);
 }
 
 globus_gfs_storage_iface_t blackpearl_dsi_iface =
