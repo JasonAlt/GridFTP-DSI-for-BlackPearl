@@ -422,7 +422,7 @@ stat_entries(ds3_client        * Client,
 			char * last_modified = NULL;
 			if (State->_bucket_response->objects[i].last_modified)
 				last_modified = ds3_str_value(State->_bucket_response->objects[i].last_modified);
-			result = stat_populate(State->_bucket_response->objects[i].name->value,
+			result = stat_populate(State->_bucket_response->objects[i].name->value + (State->_object_name ? strlen(State->_object_name) : 0),
 			                       S_IFREG,
 			                       1,
 			                       State->_bucket_response->objects[i].size,
@@ -443,7 +443,7 @@ stat_entries(ds3_client        * Client,
 			         State->_bucket_response->common_prefixes[i]->size, 
 			         "%s", 
 			         State->_bucket_response->common_prefixes[i]->value);
-			result = stat_populate(entry,
+			result = stat_populate(entry + (State->_object_name ? strlen(State->_object_name) : 0),
 			                       S_IFDIR,
 			                       2,
 			                       1024,
