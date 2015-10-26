@@ -89,6 +89,7 @@ stat_populate(char              * Name,
 	} else
 	{
 		struct tm t;
+		memset(&t, 0, sizeof(t));
 
 		int ret = sscanf(ModTime, "%d-%d-%dT%d:%d:%d.", &t.tm_year,
 		                                                &t.tm_mon,
@@ -284,7 +285,7 @@ stat_entries(ds3_client        * Client,
 	}
 
 	/* Let's find this object. */
-	if (State->_object_name && State->_object_name[strlen(State->_object_name-1)] != '/')
+	if (State->_object_name && State->_object_name[strlen(State->_object_name)-1] != '/')
 	{
 		do
 		{
