@@ -68,6 +68,14 @@ globus_result_t
 gds3_put_bucket(ds3_client * Client, char * BucketName);
 
 globus_result_t
+gds3_put_object(ds3_client * Client,
+                char       * BucketName,
+                char       * ObjectName,
+                uint64_t     Length,
+                size_t    (* Callback)(void*, size_t, size_t, void*),
+                void       * CallbackArg);
+
+globus_result_t
 gds3_put_object_for_job(ds3_client * Client,
                         char       * BucketName,
                         char       * ObjectName,

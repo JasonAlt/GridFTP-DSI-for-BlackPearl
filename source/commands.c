@@ -121,7 +121,14 @@ commands_mkdir(globus_gfs_operation_t      Operation,
 // XXX check if directoy exists by way of common prefix
 	subdir = malloc(strlen(object) + 2);
 	sprintf(subdir, "%s/", object);
-	result = gds3_put_object_for_job(Client, bucket, subdir, 0, 0, NULL, NULL, NULL);
+
+	result = gds3_put_object(Client,
+	                         bucket,
+	                         subdir,
+	                         0,
+	                         NULL,
+	                         NULL);
+
 	Callback(Operation, result, NULL);
 	free(bucket);
 	free(object);

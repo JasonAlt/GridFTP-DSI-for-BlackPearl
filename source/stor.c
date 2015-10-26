@@ -147,10 +147,6 @@ assert((Length*Nmemb) <= stor_info->BlockSize);
 			goto cleanup;
 		}
 
-		if (!stor_info->Started)
-			globus_gridftp_server_begin_transfer(stor_info->Operation, 0, NULL);
-		stor_info->Started = 1;
-
 		/* Until we find a buffer with this offset... */
 		while (1)
 		{
@@ -305,28 +301,20 @@ stor_thread(void * UserArg)
 	globus_result_t result    = GLOBUS_SUCCESS;
 	stor_info_t   * stor_info = UserArg;
 
-	result = gds3_put_object_for_job(stor_info->Client,
-	                                 stor_info->Bucket,
-	                                 stor_info->Object,
-	                                 0, /* Offset */
-	                                 stor_info->TransferInfo->alloc_size,
-	                                 NULL,
-	                                 stor_ds3_callout,
-	                                 stor_info);
+	globus_gridftp_server_begin_transfer(stor_info->Operation, 0, NULL);
 
-	if (!result) result = stor_info->Result;
+	result = gds3_put_object(stor_info->Client,
+	                         stor_info->Bucket,
+	                         stor_info->Object,
+	                         stor_info->TransferInfo->alloc_size,
+	                         stor_ds3_callout,
+	                         stor_info);
 
 	if (!result) stor_wait_for_gridftp(stor_info);
 	result = stor_info->Result;
 
-	if (!result)
-		markers_update_restart_markers(stor_info->Operation,
-		                               0, 
-		                               stor_info->TransferInfo->alloc_size);
-
 	globus_gridftp_server_finished_transfer(stor_info->Operation, result);
 	stor_destroy_info(stor_info);
-
 	return NULL;
 }
 
