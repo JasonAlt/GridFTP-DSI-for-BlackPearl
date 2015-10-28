@@ -295,6 +295,12 @@ stor_destroy_info(stor_info_t * StorInfo)
 	}
 }
 
+static void
+_put_chunk_complete(uint64_t Offset, uint64_t Length, void * Arg)
+{
+	markers_update_restart_markers(Arg, Offset, Length);
+}
+
 void *
 stor_thread(void * UserArg)
 {
@@ -307,6 +313,8 @@ stor_thread(void * UserArg)
 	                         stor_info->Bucket,
 	                         stor_info->Object,
 	                         stor_info->TransferInfo->alloc_size,
+	                         _put_chunk_complete,
+	                         stor_info->Operation,
 	                         stor_ds3_callout,
 	                         stor_info);
 
