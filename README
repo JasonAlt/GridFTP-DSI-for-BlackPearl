@@ -48,3 +48,5 @@ Known Issues (Ordered by severity)
     Globus transfer service).
 
 16) You can not set permissions
+
+17) How can we handle 'retry_after' when storing subsequent chunks?

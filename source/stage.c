@@ -118,7 +118,7 @@ stage_file(ds3_client           * Client,
 	*Residency = STAGE_FILE_RESIDENT;
 
 	// Make sure it is a regular file
-	result = stat_object(Client, Pathname, &gstat);
+	result = stat_entry(Client, Pathname, &gstat);
 	if (result)
 		return result;
 
@@ -171,7 +171,7 @@ cleanup:
 	ds3_free_bulk_response(bulk_response);
 	ds3_free_request(request);
 	ds3_free_error(error);
-	stat_destroy(&gstat);
+	stat_destroy_array(&gstat, 1);
 	if (bucket_name)
 		free(bucket_name);
 	if (object_name)
