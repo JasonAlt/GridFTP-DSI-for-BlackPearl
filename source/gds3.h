@@ -72,8 +72,10 @@ gds3_put_object(ds3_client * Client,
                 char       * BucketName,
                 char       * ObjectName,
                 uint64_t     Length,
-                size_t    (* Callback)(void*, size_t, size_t, void*),
-                void       * CallbackArg);
+                void      (* ChunkComplete) (uint64_t Offset, uint64_t Length, void * Arg),
+                void       * ChunkCompleteArg,
+                size_t    (* BufferCallout)(void*, size_t, size_t, void*),
+                void       * BufferCalloutArg);
 
 globus_result_t
 gds3_put_object_for_job(ds3_client * Client,
@@ -82,16 +84,16 @@ gds3_put_object_for_job(ds3_client * Client,
                         uint64_t     Offset,
                         uint64_t     Length,
                         char       * JobID,
-                        size_t    (* Callback)(void*, size_t, size_t, void*),
-                        void       * CallbackArg);
+                        size_t    (* BufferCallout)(void*, size_t, size_t, void*),
+                        void       * BufferCalloutArg);
 
 globus_result_t
 gds3_get_object(ds3_client * Client,
                 char       * BucketName,
                 char       * ObjectName,
                 uint64_t     Offset,
-                size_t    (* Callback)(void*, size_t, size_t, void*),
-                void       * CallbackArg);
+                size_t    (* BufferCallout)(void*, size_t, size_t, void*),
+                void       * BufferCalloutArg);
 
 globus_result_t
 gds3_get_object_for_job(ds3_client * Client,
@@ -99,11 +101,14 @@ gds3_get_object_for_job(ds3_client * Client,
                         char       * ObjectName,
                         uint64_t     Offset,
                         char       * JobID,
-                        size_t    (* Callback)(void*, size_t, size_t, void*),
-                        void       * CallbackArg);
+                        size_t    (* BufferCallout)(void*, size_t, size_t, void*),
+                        void       * BufferCalloutArg);
 
 globus_result_t
 gds3_delete_bucket(ds3_client * Client, char * BucketName);
+
+globus_result_t
+gds3_delete_folder(ds3_client * Client, char * BucketName, char * FolderName);
 
 globus_result_t
 gds3_delete_object(ds3_client * Client, char * BucketName, char * ObjectName);

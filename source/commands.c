@@ -122,12 +122,7 @@ commands_mkdir(globus_gfs_operation_t      Operation,
 	subdir = malloc(strlen(object) + 2);
 	sprintf(subdir, "%s/", object);
 
-	result = gds3_put_object(Client,
-	                         bucket,
-	                         subdir,
-	                         0,
-	                         NULL,
-	                         NULL);
+	result = gds3_put_object(Client, bucket, subdir, 0, NULL, NULL, NULL, NULL);
 
 	Callback(Operation, result, NULL);
 	free(bucket);
@@ -143,12 +138,11 @@ commands_rmdir(globus_gfs_operation_t      Operation,
 {
 	globus_result_t result = GLOBUS_SUCCESS;
 	char * bucket = NULL;
-	char * object = NULL;
-	char * subdir = NULL;
+	char * folder = NULL;
 
 	GlobusGFSName(commands_rmdir);
 
-	path_split(CommandInfo->pathname, &bucket, &object);
+	path_split(CommandInfo->pathname, &bucket, &folder);
 
 	/*
 	 * Trying to rmdir '/'.
@@ -163,7 +157,7 @@ commands_rmdir(globus_gfs_operation_t      Operation,
 	/*
 	 * rmdir /<bucket>
 	 */
-	if (!object)
+	if (!folder)
 	{
 		result = gds3_delete_bucket(Client, bucket);
 		Callback(Operation, result, NULL);
@@ -174,14 +168,10 @@ commands_rmdir(globus_gfs_operation_t      Operation,
 	/*
 	 * rmdir /<bucket>/subdirectory.
 	 */
-// XXX should check link count of subdirectory
-	subdir = malloc(strlen(object) + 2);
-	sprintf(subdir, "%s/", object);
-	result = gds3_delete_object(Client, bucket, subdir);
+	result = gds3_delete_folder(Client, bucket, folder);
 	Callback(Operation, result, NULL);
 	free(bucket);
-	free(object);
-	free(subdir);
+	free(folder);
 }
 
 void
