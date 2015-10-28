@@ -71,6 +71,11 @@ void
 stat_destroy_state(stat_state_t * StatState);
 
 globus_result_t
+stat_entry(ds3_client        * Client,
+           char              * Path,
+           globus_gfs_stat_t * GFSStat);
+
+globus_result_t
 stat_entries(ds3_client        * Client,
              char              * Path,
              int                 FileOnly,
@@ -80,27 +85,7 @@ stat_entries(ds3_client        * Client,
              stat_state_t      * State);
 
 void
-stat_destroy_entry_array(globus_gfs_stat_t *, int Count);
-
-#ifndef NOT
-globus_result_t
-stat_object(ds3_client * Client, char * Pathname, globus_gfs_stat_t *);
-
-globus_result_t
-stat_directory_entries(ds3_client        *  Client,
-                       char              *  Path,
-                       int                  MaxEntries,
-                       globus_gfs_stat_t *  GFSStatArray,
-                       int               *  CountOut,
-                       char              ** Marker);
-
-
-void
-stat_destroy(globus_gfs_stat_t *);
-
-void
 stat_destroy_array(globus_gfs_stat_t *, int Count);
-#endif
 
 #endif /* BLACPEARL_DSI_STAT_H */
 

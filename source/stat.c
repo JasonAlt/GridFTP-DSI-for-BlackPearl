@@ -166,6 +166,21 @@ stat_destroy_state(stat_state_t * State)
 }
 
 globus_result_t
+stat_entry(ds3_client        * Client,
+           char              * Path,
+           globus_gfs_stat_t * GFSStat)
+{
+	int          count_out = 0;
+	stat_state_t state;
+	globus_result_t result;
+
+	stat_init_state(&state);
+	result = stat_entries(Client, Path, 1, 1, GFSStat, &count_out, &state);
+	stat_destroy_state(&state);
+	return result;
+}
+
+globus_result_t
 stat_entries(ds3_client        * Client,
              char              * Path,
              int                 FileOnly,
