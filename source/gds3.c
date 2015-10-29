@@ -150,6 +150,7 @@ gds3_put_object(ds3_client * Client,
 	request = ds3_init_put_bulk(BucketName, &bulk_object_list);
 	error   = ds3_bulk(Client, request, &bulk_response);
 	result  = error_translate(error);
+	ds3_free_bulk_object_list(&bulk_object_list);
 	ds3_str_free(bulk_object.name);
 	ds3_free_request(request);
 	ds3_free_error(error);
@@ -242,6 +243,7 @@ gds3_get_object(ds3_client * Client,
 	request = ds3_init_get_bulk(BucketName, &bulk_object_list, IN_ORDER);
 	error   = ds3_bulk(Client, request, &bulk_response);
 	result  = error_translate(error);
+	ds3_free_bulk_object_list(&bulk_object_list);
 	ds3_str_free(bulk_object.name);
 	ds3_free_request(request);
 	ds3_free_error(error);
