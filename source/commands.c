@@ -88,7 +88,8 @@ commands_mkdir(globus_gfs_operation_t      Operation,
 	globus_result_t result = GLOBUS_SUCCESS;
 	char * bucket = NULL;
 	char * object = NULL;
-	char * subdir = NULL;
+	char * folder = NULL;
+	ds3_bulk_response * bulk_response = NULL;
 
 	GlobusGFSName(commands_mkdir);
 
@@ -116,18 +117,16 @@ commands_mkdir(globus_gfs_operation_t      Operation,
 	}
 
 	/*
-	 * New object / subdirectory.
+	 * New object / folder.
 	 */
-// XXX check if directoy exists by way of common prefix
-	subdir = malloc(strlen(object) + 2);
-	sprintf(subdir, "%s/", object);
-
-	result = gds3_put_object(Client, bucket, subdir, 0, NULL, NULL, NULL, NULL);
-
+	folder = malloc(strlen(object) + 2);
+	sprintf(folder, "%s/", object);
+	result = gds3_init_bulk_put(Client, bucket, folder, 0, &bulk_response);
 	Callback(Operation, result, NULL);
+	ds3_free_bulk_response(bulk_response);
 	free(bucket);
 	free(object);
-	free(subdir);
+	free(folder);
 }
 
 void

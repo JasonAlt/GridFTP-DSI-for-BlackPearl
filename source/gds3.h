@@ -68,14 +68,26 @@ globus_result_t
 gds3_put_bucket(ds3_client * Client, char * BucketName);
 
 globus_result_t
-gds3_put_object(ds3_client * Client,
-                char       * BucketName,
-                char       * ObjectName,
-                uint64_t     Length,
-                void      (* ChunkComplete) (uint64_t Offset, uint64_t Length, void * Arg),
-                void       * ChunkCompleteArg,
-                size_t    (* BufferCallout)(void*, size_t, size_t, void*),
-                void       * BufferCalloutArg);
+gds3_init_bulk_put(ds3_client         * Client,
+                   char               * BucketName, 
+                   char               * ObjectName, 
+                   uint64_t             Length, 
+                   ds3_bulk_response ** BulkResponse);
+
+globus_result_t
+gds3_allocate_chunk(ds3_client                   * Client,
+                    ds3_str                      * ChunkID,
+                    ds3_allocate_chunk_response ** ChunkResponse);
+
+//globus_result_t
+//gds3_put_object(ds3_client * Client,
+//                char       * BucketName,
+//                char       * ObjectName,
+//                uint64_t     Length,
+//                void      (* ChunkComplete) (uint64_t Offset, uint64_t Length, void * Arg),
+//                void       * ChunkCompleteArg,
+//                size_t    (* BufferCallout)(void*, size_t, size_t, void*),
+//                void       * BufferCalloutArg);
 
 globus_result_t
 gds3_put_object_for_job(ds3_client * Client,
@@ -113,5 +125,10 @@ gds3_delete_folder(ds3_client * Client, char * BucketName, char * FolderName);
 globus_result_t
 gds3_delete_object(ds3_client * Client, char * BucketName, char * ObjectName);
 
+globus_result_t
+gds3_get_jobs(ds3_client * Client, ds3_get_jobs_response **);
+
+globus_result_t
+gds3_get_job(ds3_client * Client, const char * JobID, ds3_bulk_response ** Response);
 
 #endif /* BLACKPEARL_GDSI_DS3_H */

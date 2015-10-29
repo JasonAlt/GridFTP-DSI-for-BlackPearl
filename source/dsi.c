@@ -204,24 +204,6 @@ dsi_recv(globus_gfs_operation_t       Operation,
          globus_gfs_transfer_info_t * TransferInfo,
          void                       * UserArg)
 {
-	globus_result_t result = GLOBUS_SUCCESS;
-
-	GlobusGFSName(dsi_recv);
-
-	if (dsi_partial_transfer(TransferInfo))
-	{
-		result = GlobusGFSErrorGeneric("Partial STOR is not supported");
-		globus_gridftp_server_finished_transfer(Operation, result);
-		return;
-	}
-
-	if (dsi_restart_transfer(TransferInfo))
-	{
-		result = GlobusGFSErrorGeneric("Restarts are is supported");
-		globus_gridftp_server_finished_transfer(Operation, result);
-		return;
-	}
-
 	stor(UserArg, Operation, TransferInfo);
 }
 

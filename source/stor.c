@@ -128,9 +128,9 @@ stor_ds3_callout(void * Buffer,
                  size_t Nmemb,
                  void * UserArg)
 {
-	int             rc        = 0;
-	stor_info_t   * stor_info = UserArg;
-	globus_result_t result    = GLOBUS_SUCCESS;
+	int             rc          = 0;
+	stor_info_t   * stor_info   = UserArg;
+	globus_result_t result      = GLOBUS_SUCCESS;
 	globus_list_t * buf_entry   = NULL;
 	stor_buffer_t * stor_buffer = NULL;
 
@@ -295,33 +295,162 @@ stor_destroy_info(stor_info_t * StorInfo)
 	}
 }
 
-static void
-_put_chunk_complete(uint64_t Offset, uint64_t Length, void * Arg)
+static globus_result_t
+_find_bulk_response(ds3_client                  * Client,
+                    const char                  * BucketName,
+                    const char                  * ObjectName,
+                    uint64_t                      Offset, 
+                    const ds3_get_jobs_response * GetJobsResponse,
+                    ds3_bulk_response          ** BulkResponse)
 {
-	markers_update_restart_markers(Arg, Offset, Length);
+	globus_result_t result = GLOBUS_SUCCESS;
+	int i = 0;
+	int j = 0;
+	int k = 0;
+
+	for (i = 0; i < GetJobsResponse->jobs_size; i++)
+	{
+		if (strcmp(BucketName, GetJobsResponse->jobs[i]->bucket_name->value) == 0)
+		{
+			if (GetJobsResponse->jobs[i]->completed_size_in_bytes == Offset)
+			{
+				result = gds3_get_job(Client,
+				                      GetJobsResponse->jobs[i]->job_id->value, 
+				                      BulkResponse);
+				if (result)
+					return result;
+
+				for (j = 0; j < (*BulkResponse)->list_size; j++)
+				{
+					for (k = 0; k < (*BulkResponse)->list[j]->size; k++)
+					{
+						if (strcmp(ObjectName, (*BulkResponse)->list[j]->list[k].name->value) == 0)
+						{
+							if (Offset == (*BulkResponse)->list[j]->list[k].offset)
+								return GLOBUS_SUCCESS;
+						}
+					}
+				}
+				ds3_free_bulk_response(*BulkResponse);
+				*BulkResponse = NULL;
+			}
+
+		}
+	}
+	return result;
 }
+
+/*
+ * We only support transfers with a chunk-boundry offset and lengths to the
+ * end of the file.
+ */
 
 void *
 stor_thread(void * UserArg)
 {
-	globus_result_t result    = GLOBUS_SUCCESS;
-	stor_info_t   * stor_info = UserArg;
+	ds3_allocate_chunk_response * chunk_response     = NULL;
+	ds3_get_jobs_response       * get_jobs_response  = NULL;
+	globus_result_t               result             = GLOBUS_SUCCESS;
+	stor_info_t                 * stor_info          = UserArg;
+	ds3_bulk_response           * bulk_response      = NULL;
+	globus_off_t                  offset             = 0;
+	globus_off_t                  length             = 0;
+	int                           i                  = 0;
+
+	GlobusGFSName(stor_thread);
+
+	result = gds3_get_jobs(stor_info->Client, &get_jobs_response);
+	if (result)
+		goto cleanup;
+
+	globus_gridftp_server_get_write_range(stor_info->Operation, &offset, &length);
+	if (!length)
+		goto cleanup;
+
+	assert(length == -1);
+
+	result = _find_bulk_response(stor_info->Client,
+	                             stor_info->Bucket,
+	                             stor_info->Object,
+	                             offset,
+	                             get_jobs_response,
+	                             &bulk_response);
+
+	if (!bulk_response && offset != 0)
+	{
+		result = GlobusGFSErrorGeneric("No job for restart. You must transfer the entire file.");
+		goto cleanup;
+	}
+
+	if (!bulk_response)
+	{
+		result = gds3_init_bulk_put(stor_info->Client,
+		                            stor_info->Bucket,
+		                            stor_info->Object,
+		                            stor_info->TransferInfo->alloc_size,
+		                            &bulk_response);
+		if (result)
+			goto cleanup;
+	}
+
+	/* For zero-length files. */
+	if (!bulk_response)
+		goto cleanup;
 
 	globus_gridftp_server_begin_transfer(stor_info->Operation, 0, NULL);
 
-	result = gds3_put_object(stor_info->Client,
-	                         stor_info->Bucket,
-	                         stor_info->Object,
-	                         stor_info->TransferInfo->alloc_size,
-	                         _put_chunk_complete,
-	                         stor_info->Operation,
-	                         stor_ds3_callout,
-	                         stor_info);
+	for (i = 0; i < bulk_response->list_size; i++)
+	{
+		// Each chunk has one object
+		assert(bulk_response->list[i]->size == 1);
 
-	if (!result) stor_wait_for_gridftp(stor_info);
+		// In case Spectra returns successfully transferred chunks
+		if (bulk_response->list[i]->list[0].offset < offset)
+			continue;
+
+		result = gds3_allocate_chunk(stor_info->Client,
+		                             bulk_response->list[i]->chunk_id,
+		                             &chunk_response);
+		if (result)
+			goto cleanup;
+
+		if (chunk_response->retry_after)
+		{
+			result = GlobusGFSErrorGeneric("No spaceon device for incoming file.");
+			goto cleanup;
+		}
+		assert(chunk_response->objects->size == 1);
+
+		// So the callback knows our current offset.
+		stor_info->Offset = bulk_response->list[i]->list[0].offset;
+
+		result = gds3_put_object_for_job(stor_info->Client,
+		                                 stor_info->Bucket,
+		                                 stor_info->Object,
+		                                 chunk_response->objects->list->offset,
+		                                 chunk_response->objects->list->length,
+		                                 bulk_response->job_id->value,
+		                                 stor_ds3_callout,
+		                                 stor_info);
+		if (result)
+			goto cleanup;
+
+		markers_update_restart_markers(stor_info->Operation,
+		                               chunk_response->objects->list->offset, 
+		                               chunk_response->objects->list->length);
+
+		ds3_free_allocate_chunk_response(chunk_response);
+		chunk_response = NULL;
+	}
+
+	stor_wait_for_gridftp(stor_info);
 	result = stor_info->Result;
 
+cleanup:
 	globus_gridftp_server_finished_transfer(stor_info->Operation, result);
+	ds3_free_get_jobs_response(get_jobs_response);
+	ds3_free_bulk_response(bulk_response);
+	ds3_free_allocate_chunk_response(chunk_response);
 	stor_destroy_info(stor_info);
 	return NULL;
 }
