@@ -151,10 +151,6 @@ retr_ds3_callout(void * ReadyBuffer,
 
 	pthread_mutex_lock(&retr_info->Mutex);
 	{
-		if (!retr_info->Started)
-			globus_gridftp_server_begin_transfer(retr_info->Operation, 0, NULL);
-		retr_info->Started = 1;
-
 		while (buf_offset != (Length*Nmemb))
 		{
 			result = retr_get_free_buffer(retr_info, &free_buffer);
@@ -170,12 +166,12 @@ retr_ds3_callout(void * ReadyBuffer,
 				cpy_length = retr_info->BlockSize;
 
 
-			memcpy(free_buffer, ReadyBuffer, cpy_length);
+			memcpy(free_buffer, ReadyBuffer + buf_offset, cpy_length);
 
 			result = globus_gridftp_server_register_write(retr_info->Operation,
-			                                              ReadyBuffer + buf_offset,
+			                                              free_buffer,
 			                                              cpy_length,
-			                                              retr_info->Offset + buf_offset,
+			                                              retr_info->Offset,
 			                                              0,
 			                                              retr_gridftp_callout,
 			                                              retr_info);
@@ -189,7 +185,7 @@ retr_ds3_callout(void * ReadyBuffer,
 
 			/* Update perf markers */
 			markers_update_perf_markers(retr_info->Operation, 
-			                            retr_info->Offset + buf_offset, 
+			                            retr_info->Offset,
 			                            cpy_length);
 
 			retr_info->Offset += cpy_length;
@@ -241,6 +237,7 @@ retr_thread(void * UserArg)
 	globus_result_t result    = GLOBUS_SUCCESS;
 	retr_info_t   * retr_info = UserArg;
 
+			globus_gridftp_server_begin_transfer(retr_info->Operation, 0, NULL);
 	result = gds3_get_object_for_job(retr_info->Client,
 	                                 retr_info->Bucket,
 	                                 retr_info->Object,

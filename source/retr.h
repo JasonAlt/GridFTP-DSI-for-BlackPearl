@@ -66,8 +66,6 @@ typedef struct {
 	char                       * Bucket;
 	char                       * Object;
 
-	int                          Started;
-
 	globus_result_t              Result;
 	globus_size_t                BlockSize;
 
