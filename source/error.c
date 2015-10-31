@@ -80,7 +80,8 @@ error_translate(ds3_error * Error)
 	switch (Error->code)
 	{
 	case DS3_ERROR_BAD_STATUS_CODE:
-		return GlobusGFSErrorGeneric(ds3_str_value(Error->error->status_message));
+		//return GlobusGFSErrorGeneric(ds3_str_value(Error->error->status_message));
+		return GlobusGFSErrorGeneric(ds3_str_value(Error->error->error_body));
 	case DS3_ERROR_TOO_MANY_REDIRECTS:
 	case DS3_ERROR_INVALID_XML:
 	case DS3_ERROR_CURL_HANDLE:
