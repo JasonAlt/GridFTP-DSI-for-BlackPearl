@@ -85,6 +85,9 @@ stat_entries(ds3_client        * Client,
              stat_state_t      * State);
 
 void
+stat_destroy(globus_gfs_stat_t * GFSStat);
+
+void
 stat_destroy_array(globus_gfs_stat_t *, int Count);
 
 #endif /* BLACPEARL_DSI_STAT_H */

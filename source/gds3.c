@@ -184,7 +184,11 @@ gds3_put_object_for_job(ds3_client * Client,
 	ds3_request     * request = NULL;
 	ds3_error       * error   = NULL;
 
-	request = ds3_init_put_object_for_job(BucketName, ObjectName, Offset, Length, JobID);
+	request = ds3_init_put_object_for_job(BucketName,
+	                                      ObjectName, 
+	                                      Offset, 
+	                                      Length, 
+	                                      JobID);
 	error   = ds3_put_object(Client, request, BufferCalloutArg, BufferCallout);
 	result  = error_translate(error);
 	ds3_free_request(request);
@@ -193,20 +197,37 @@ gds3_put_object_for_job(ds3_client * Client,
 }
 
 globus_result_t
-gds3_get_object(ds3_client * Client,
-                char       * BucketName,
-                char       * ObjectName,
-                uint64_t     Offset,
-                size_t    (* BufferCallout)(void*, size_t, size_t, void*),
-                void       * BufferCalloutArg)
+gds3_available_chunks(ds3_client                        *  Client,
+                      ds3_str                           *  JobID,
+                      ds3_get_available_chunks_response ** ChunkResponse)
+{
+	globus_result_t   result  = GLOBUS_SUCCESS;
+	ds3_request     * request = NULL;
+	ds3_error       * error   = NULL;
+
+	*ChunkResponse = NULL;
+
+	request = ds3_init_get_available_chunks(JobID->value);
+	error   = ds3_get_available_chunks(Client, request, ChunkResponse);
+	result  = error_translate(error);
+	ds3_free_request(request);
+	ds3_free_error(error);
+	return result;
+}
+
+globus_result_t
+gds3_init_bulk_get(ds3_client         * Client,
+                   char               * BucketName, 
+                   char               * ObjectName, 
+                   uint64_t             Offset,
+                   uint64_t             Length,
+                   ds3_bulk_response ** BulkResponse)
 {
 	ds3_bulk_object_list bulk_object_list;
 	ds3_bulk_object      bulk_object;
-	ds3_bulk_response  * bulk_response = NULL;
 	ds3_request        * request       = NULL;
 	ds3_error          * error         = NULL;
 	globus_result_t      result        = GLOBUS_SUCCESS;
-	int                  i;
 
 	memset(&bulk_object_list, 0, sizeof(bulk_object_list));
 	memset(&bulk_object, 0, sizeof(bulk_object));
@@ -214,46 +235,16 @@ gds3_get_object(ds3_client * Client,
 	bulk_object_list.size = 1;
 	bulk_object_list.list = &bulk_object;
 	bulk_object.name      = ds3_str_init(ObjectName);
-	bulk_object.length    = Offset;
+	bulk_object.offset    = Offset;
+	bulk_object.length    = Length;
 
 	request = ds3_init_get_bulk(BucketName, &bulk_object_list, IN_ORDER);
-	error   = ds3_bulk(Client, request, &bulk_response);
+	error   = ds3_bulk(Client, request, BulkResponse);
 	result  = error_translate(error);
 	ds3_str_free(bulk_object.name);
 	ds3_free_request(request);
 	ds3_free_error(error);
-	if (result)
-		return result;
-
-	for (i = 0; i < bulk_response->list_size; i++)
-	{
-		ds3_get_available_chunks_response * chunks_response = NULL;
-
-		request = ds3_init_get_available_chunks(bulk_response->list[i]->chunk_id->value);
-		error   = ds3_get_available_chunks(Client, request, &chunks_response);
-		result  = error_translate(error);
-		ds3_free_request(request);
-		ds3_free_error(error);
-		if (result)
-			return result;
-assert(chunks_response->object_list->list_size == 1);
-assert(chunks_response->object_list->list[0]->size == 1);
-
-		/* How to handle retry after... */
-		result = gds3_get_object_for_job(Client,
-		                                 BucketName,
-		                                 ObjectName,
-		                                 chunks_response->object_list->list[0]->list->offset,
-		                                 bulk_response->job_id->value,
-		                                 BufferCallout,
-		                                 BufferCalloutArg);
-		ds3_free_available_chunks_response(chunks_response);
-
-		if (result)
-			return result;
-	}
-
-	return GLOBUS_SUCCESS;
+	return result;
 }
 
 globus_result_t

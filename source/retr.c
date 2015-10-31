@@ -60,6 +60,7 @@
 #include "retr.h"
 #include "gds3.h"
 #include "path.h"
+#include "stat.h"
 #include "markers.h"
 
 void
@@ -165,7 +166,6 @@ retr_ds3_callout(void * ReadyBuffer,
 			if (cpy_length > retr_info->BlockSize)
 				cpy_length = retr_info->BlockSize;
 
-
 			memcpy(free_buffer, ReadyBuffer + buf_offset, cpy_length);
 
 			result = globus_gridftp_server_register_write(retr_info->Operation,
@@ -234,27 +234,80 @@ retr_destroy_info(retr_info_t * RetrInfo)
 void *
 retr_thread(void * UserArg)
 {
-	globus_result_t result    = GLOBUS_SUCCESS;
-	retr_info_t   * retr_info = UserArg;
+	int                 i             = 0;
+	int                 last_loop     = 0;
+	globus_off_t        offset        = 0;
+	globus_off_t        length        = 0;
+	globus_result_t     result        = GLOBUS_SUCCESS;
+	retr_info_t       * retr_info     = UserArg;
+	ds3_bulk_response * bulk_response = NULL;
 
-			globus_gridftp_server_begin_transfer(retr_info->Operation, 0, NULL);
-	result = gds3_get_object_for_job(retr_info->Client,
-	                                 retr_info->Bucket,
-	                                 retr_info->Object,
-	                                 0,    /* Offset */
-	                                 NULL, /* JobID  */
-	                                 retr_ds3_callout,
-	                                 retr_info);
+	globus_gridftp_server_begin_transfer(retr_info->Operation, 0, NULL);
 
-	if (!result)
-		retr_wait_for_gridftp(retr_info);
+	while (!last_loop)
+	{
+		globus_gridftp_server_get_write_range(retr_info->Operation,
+		                                      &offset,
+		                                      &length);
+		if (length == 0)
+			break;
 
-	if (!result) result = retr_info->Result;
+		if (length == -1)
+		{
+			globus_gfs_stat_t gfs_stat;
+			result = stat_entry(retr_info->Client,
+			                    retr_info->TransferInfo->pathname,
+			                    &gfs_stat);
+			if (result)
+				break;
+
+			length = gfs_stat.size - offset;
+		
+			stat_destroy(&gfs_stat);
+			last_loop = 1;
+		}
+
+		/* This allows us to specify offset and length. */
+		result = gds3_init_bulk_get(retr_info->Client,
+		                            retr_info->Bucket,
+		                            retr_info->Object,
+		                            offset,
+		                            length,
+		                            &bulk_response);
+		if (result)
+			break;
+
+		for (i = 0; i < bulk_response->list_size; i++)
+		{
+			assert(bulk_response->list[i]->size == 1);
+
+/*
+ * XXX bulk_response returns chunks that contain the offsets we need.
+ * We must make one request per chunk that includes the ranges within
+ * that chunk that we need.
+ */
+			retr_info->Offset = bulk_response->list[i]->list[0].offset;
+			result = gds3_get_object_for_job(retr_info->Client,
+			                                 retr_info->Bucket,
+			                                 retr_info->Object,
+			                                 bulk_response->list[i]->list[0].offset,
+			                                 bulk_response->job_id->value,
+			                                 retr_ds3_callout,
+			                                 retr_info);
+			if (result)
+				break;
+		}
+
+		ds3_free_bulk_response(bulk_response);
+		bulk_response = NULL;
+	}
+
 	globus_gridftp_server_finished_transfer(retr_info->Operation, result);
-	retr_destroy_info(retr_info);
+	ds3_free_bulk_response(bulk_response);
 
 	return NULL;
 }
+
 
 void
 retr(ds3_client                 * Client, 
