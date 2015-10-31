@@ -122,6 +122,85 @@ gds3_put_bucket(ds3_client * Client, char * BucketName)
 }
 
 globus_result_t
+gds3_get_object(ds3_client *  Client,
+                char       *  BucketName,
+                char       *  ObjectName,
+                ds3_object ** Object)
+{
+	ds3_get_bucket_response * response = NULL;
+	globus_result_t           result   = GLOBUS_SUCCESS;
+	char                    * marker   = NULL;
+	int                       i        = 0;
+
+	*Object = NULL;
+
+	do {
+		result = gds3_get_bucket(Client,
+		                         BucketName,
+		                         &response,
+		                         "/",        // Delimiter
+		                         ObjectName, // Prefix
+		                         marker,
+		                         16);        // MaxKeys
+
+		if (!result)
+		{
+			for (i = 0; i < response->num_objects; i++)
+			{
+				if (strcmp(response->objects[i].name->value, ObjectName) == 0)
+				{
+					*Object = gds3_copy_object(&response->objects[i]);
+					break;
+				}
+			}
+		}
+
+		if (marker) free(marker);
+		marker = NULL;
+		if (response)
+		{
+			if (!*Object && response->next_marker)
+				marker = strdup(response->next_marker->value);
+			ds3_free_bucket_response(response);
+			response = NULL;
+		}
+	} while (!result && marker);
+
+	return GLOBUS_SUCCESS;
+}
+
+ds3_object *
+gds3_copy_object(const ds3_object * SourceObject)
+{
+	ds3_object * dest = malloc(sizeof(ds3_object));
+
+	memset(dest, 0, sizeof(ds3_object));
+	dest->name = ds3_str_dup(SourceObject->name);
+	if (SourceObject->etag)
+		dest->etag = ds3_str_dup(SourceObject->etag);
+	dest->size = SourceObject->size;
+	dest->owner = SourceObject->owner;
+	dest->last_modified = ds3_str_dup(SourceObject->last_modified);
+	if (SourceObject->storage_class)
+		dest->storage_class = ds3_str_dup(SourceObject->storage_class);
+	return dest;
+}
+
+void
+gds3_free_object(ds3_object * Object)
+{
+	if (Object)
+	{
+		ds3_str_free(Object->name);
+		if (Object->etag)
+			ds3_str_free(Object->etag);
+		ds3_str_free(Object->last_modified);
+		ds3_str_free(Object->storage_class);
+		free(Object);
+	}
+}
+
+globus_result_t
 gds3_init_bulk_put(ds3_client         * Client,
                    char               * BucketName, 
                    char               * ObjectName, 

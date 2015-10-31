@@ -68,6 +68,18 @@ globus_result_t
 gds3_put_bucket(ds3_client * Client, char * BucketName);
 
 globus_result_t
+gds3_get_object(ds3_client *  Client, 
+                char       *  BucketName, 
+                char       *  ObjectName,
+                ds3_object ** Object);
+
+ds3_object *
+gds3_copy_object(const ds3_object * SourceObject);
+
+void
+gds3_free_object(ds3_object * Object);
+
+globus_result_t
 gds3_init_bulk_put(ds3_client         * Client,
                    char               * BucketName, 
                    char               * ObjectName, 
