@@ -44,6 +44,7 @@
  */
 #include <openssl/md5.h>
 #include <pthread.h>
+#include <time.h>
 
 /*
  * Globus includes
@@ -72,6 +73,10 @@ typedef struct {
 	commands_callback            Callback;
 	MD5_CTX                      MD5Context;
 	globus_result_t              Result;
+	uint64_t                     Size;
+	uint64_t                     Offset;
+	int                          MarkerFreq;
+	time_t                       LastMarker;
 } cksm_info_t;
 
 size_t
@@ -92,28 +97,66 @@ cksm_ds3_callback(void * Buffer,
 		return -1;
 	}
 
+	cksm_info->Offset += Nmemb * Length;
+
+	if (cksm_info->MarkerFreq)
+	{
+		if ((time(NULL) - cksm_info->LastMarker) > cksm_info->MarkerFreq)
+		{
+			char total_bytes_string[128];
+
+			sprintf(total_bytes_string, "%"GLOBUS_OFF_T_FORMAT, cksm_info->Offset);
+			globus_gridftp_server_intermediate_command(cksm_info->Operation,
+			                                           GLOBUS_SUCCESS,
+			                                           total_bytes_string);
+
+			cksm_info->LastMarker = time(NULL);
+		}
+	}
+
 	return Length*Nmemb;
 }
 
 void *
 cksm_thread(void * UserArg)
 {
-	globus_result_t result    = GLOBUS_SUCCESS;
-	cksm_info_t   * cksm_info = UserArg;
-	int             rc;
-	unsigned char   md5_digest[MD5_DIGEST_LENGTH];
-	char            cksm_string[2*MD5_DIGEST_LENGTH+1];
-	int             i;
+	globus_result_t     result    = GLOBUS_SUCCESS;
+	cksm_info_t       * cksm_info = UserArg;
+	int                 rc;
+	unsigned char       md5_digest[MD5_DIGEST_LENGTH];
+	char                cksm_string[2*MD5_DIGEST_LENGTH+1];
+	ds3_bulk_response * bulk_response = NULL;
+	int                 i;
 
 	GlobusGFSName(cksm_thread);
 
-	result = gds3_get_object_for_job(cksm_info->Client,
-	                                 cksm_info->Bucket,
-	                                 cksm_info->Object,
-	                                 0,    /* Offset */
-	                                 NULL, /* JobID  */
-	                                 cksm_ds3_callback,
-	                                 cksm_info);
+	if (cksm_info->Size)
+	{
+		/* This allows us to specify offset and length. */
+		result = gds3_init_bulk_get(cksm_info->Client,
+		                            cksm_info->Bucket,
+		                            cksm_info->Object,
+		                            0,
+		                            cksm_info->Size,
+		                            &bulk_response);
+
+		if (!result)
+		{
+			while (cksm_info->Offset != cksm_info->Size)
+			{
+				result = gds3_get_object_for_job(cksm_info->Client,
+				                                 cksm_info->Bucket,
+				                                 cksm_info->Object,
+				                                 cksm_info->Offset,
+				                                 bulk_response->job_id->value,
+				                                 cksm_ds3_callback,
+				                                 cksm_info);
+
+				if (result)
+					break;
+			}
+		}
+	}
 
 	if (!result) result = cksm_info->Result;
 	if (!result)
@@ -139,68 +182,20 @@ cksm_thread(void * UserArg)
 	return NULL;
 }
 
-globus_result_t
-_get_object_cksm(ds3_client *  Client,
-                 char       *  BucketName,
-                 char       *  ObjectName,
-                 char       ** Checksum)
-{
-	ds3_get_bucket_response * response = NULL;
-	globus_result_t           result   = GLOBUS_SUCCESS;
-	char                    * marker   = NULL;
-	int                       i        = 0;
-
-	*Checksum = NULL;
-
-	do {
-		result = gds3_get_bucket(Client, 
-		                         BucketName,
-		                         &response,
-		                         "/",        // Delimiter
-		                         ObjectName, // Prefix
-		                         marker,     
-		                         16);        // MaxKeys
-
-		if (!result)
-		{
-			for (i = 0; i < response->num_objects; i++)
-			{
-				if (strcmp(response->objects[i].name->value, ObjectName) == 0)
-				{
-					if (!strchr(response->objects[i].etag->value, '-'))
-						*Checksum = strdup(response->objects[i].etag->value);
-					break;
-				}
-			}
-		}
-
-		if (marker) free(marker);
-		marker = NULL;
-		if (response)
-		{
-			if (response->next_marker)
-				marker = strdup(response->next_marker->value);
-			ds3_free_bucket_response(response);
-			response = NULL;
-		}
-	} while (!result && marker);
-
-	return GLOBUS_SUCCESS;
-}
-
 void
 cksm(globus_gfs_operation_t      Operation,
      globus_gfs_command_info_t * CommandInfo,
      ds3_client                * Client,
      commands_callback           Callback)
 {
-	globus_result_t result    = GLOBUS_SUCCESS;
-	cksm_info_t   * cksm_info = NULL;
-	char          * checksum  = NULL;
-	char          * bucket    = NULL;
-	char          * object    = NULL;
-	int             rc        = 0;
-	int             initted   = 0;
+	globus_result_t result      = GLOBUS_SUCCESS;
+	cksm_info_t   * cksm_info   = NULL;
+	ds3_object    * object      = NULL;
+	char          * bucket_name = NULL;
+	char          * object_name = NULL;
+	char          * checksum    = NULL;
+	int             rc          = 0;
+	int             initted     = 0;
 	pthread_t       thread;
 	pthread_attr_t  attr;
 
@@ -214,31 +209,38 @@ cksm(globus_gfs_operation_t      Operation,
 		return;
 	}
 
-	path_split(CommandInfo->pathname, &bucket, &object);
-	if (!object)
+	path_split(CommandInfo->pathname, &bucket_name, &object_name);
+	if (!object_name)
 	{
-		if (!bucket) free(bucket);
+		if (!bucket_name) free(bucket_name);
 		result = GlobusGFSErrorGeneric("Can only checksum objects within buckets");
 		Callback(Operation, result, NULL);
 		return;
 	}
 
 	// Shortcut
-	result = _get_object_cksm(Client, bucket, object, &checksum);
+	result = gds3_get_object(Client, bucket_name, object_name, &object);
+	if (!result && !object)
+		result = GlobusGFSErrorGeneric("No such object");
+	if (!result && object && object->etag && !strchr(object->etag->value, '-'))
+		checksum = object->etag->value;
+
 	if (result || checksum)
 	{
-		free(bucket);
-		free(object);
+		free(bucket_name);
+		free(object_name);
 		Callback(Operation, result, checksum);
-		if (checksum) free(checksum);
+		if (object)
+			gds3_free_object(object);
 		return;
 	}
 
 	cksm_info = malloc(sizeof(cksm_info_t));
 	if (!cksm_info)
 	{
-		free(bucket);
-		free(object);
+		free(bucket_name);
+		free(object_name);
+		gds3_free_object(object);
 		result = GlobusGFSErrorMemory("cksm_info_t");
 		Callback(Operation, result, NULL);
 		return;
@@ -248,9 +250,16 @@ cksm(globus_gfs_operation_t      Operation,
 	cksm_info->Client       = Client;
 	cksm_info->Operation    = Operation;
 	cksm_info->CommandInfo  = CommandInfo;
-	cksm_info->Bucket       = bucket;
-	cksm_info->Object       = object;
+	cksm_info->Bucket       = bucket_name;
+	cksm_info->Object       = object_name;
 	cksm_info->Callback     = Callback;
+	cksm_info->Size         = object->size;
+	cksm_info->LastMarker   = time(NULL);
+
+	globus_gridftp_server_get_update_interval(Operation,
+	                                          &cksm_info->MarkerFreq);
+
+	gds3_free_object(object);
 
 	rc = MD5_Init(&cksm_info->MD5Context);
 	if (rc != 1)
