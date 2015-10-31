@@ -98,6 +98,11 @@ gds3_init_bulk_get(ds3_client        *  Client,
                    ds3_bulk_response ** BulkResponse);
 
 globus_result_t
+gds3_available_chunks(ds3_client                        *  Client,
+                      ds3_str                           *  JobID,
+                      ds3_get_available_chunks_response ** ChunkResponse);
+
+globus_result_t
 gds3_get_object_for_job(ds3_client * Client,
                         char       * BucketName,
                         char       * ObjectName,
@@ -120,5 +125,8 @@ gds3_get_jobs(ds3_client * Client, ds3_get_jobs_response **);
 
 globus_result_t
 gds3_get_job(ds3_client * Client, const char * JobID, ds3_bulk_response ** Response);
+
+globus_result_t
+gds3_delete_job(ds3_client * Client, ds3_str * JobID);
 
 #endif /* BLACKPEARL_GDSI_DS3_H */

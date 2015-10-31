@@ -348,3 +348,18 @@ gds3_get_job(ds3_client * Client, const char * JobID, ds3_bulk_response ** Respo
 	return result;
 }
 
+globus_result_t
+gds3_delete_job(ds3_client * Client, ds3_str * JobID)
+{
+	ds3_request   * request = NULL;
+	ds3_error     * error   = NULL;
+	globus_result_t result  = GLOBUS_SUCCESS;
+
+	request = ds3_init_delete_job(ds3_str_value(JobID));
+	error   = ds3_delete_job(Client, request);
+	result = error_translate(error);
+	ds3_free_request(request);
+	ds3_free_error(error);
+	return result;
+}
+

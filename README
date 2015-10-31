@@ -6,7 +6,7 @@ DSI provides a POSIX-like view of the object store.
 
 Known Issues (Ordered by severity)
 ==================================
-1) Chunk transfers do not work. Multi-chunk staging does not work.
+1) Partial retrieves including restarts are not supported.
 
 2) You can not 'preserve source file modification times' because MFMT is not
    supported.
@@ -31,7 +31,7 @@ Known Issues (Ordered by severity)
    with the common_prefix is removed.
 
 9) Directory entry counts are not checked before deleting an object that
-    represents a directory.
+   represents a directory.
 
 10) Inodes in directory listings are not supported.
 
@@ -48,5 +48,3 @@ Known Issues (Ordered by severity)
     Globus transfer service).
 
 16) You can not set permissions
-
-17) How can we handle 'retry_after' when storing subsequent chunks?

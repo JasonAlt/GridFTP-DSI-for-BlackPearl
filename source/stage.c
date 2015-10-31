@@ -64,6 +64,7 @@
 #include "stage.h"
 #include "stat.h"
 #include "path.h"
+#include "gds3.h"
 
 globus_result_t
 stage_get_timeout(globus_gfs_operation_t      Operation,
@@ -104,13 +105,13 @@ stage_file(ds3_client           * Client,
 	char                              * bucket_name    = NULL;
 	char                              * object_name    = NULL;
 	globus_result_t                     result         = GLOBUS_SUCCESS;
-	ds3_error                         * error          = NULL;
-	ds3_request                       * request        = NULL;
 	ds3_bulk_response                 * bulk_response  = NULL;
 	ds3_get_available_chunks_response * chunk_response = NULL;
 	ds3_bulk_object_list              * object_list    = NULL;
 	globus_gfs_stat_t                   gstat;
+	uint64_t                            offset         = 0;
 	time_t                              start_time     = time(NULL);
+	int                                 i              = 0;
 
 	GlobusGFSName(stage_file);
 
@@ -126,28 +127,49 @@ stage_file(ds3_client           * Client,
 		goto cleanup;
 
 	path_split(Pathname, &bucket_name, &object_name);
-	object_list = ds3_convert_file_list(&object_name, 1);
-	request     = ds3_init_get_bulk(bucket_name, object_list, NONE);
-	error       = ds3_bulk(Client, request, &bulk_response);
-	if (error)
-		goto cleanup;
 
-	ds3_free_request(request);
+	result = gds3_init_bulk_get(Client,
+	                            bucket_name,
+	                            object_name,
+	                            0,
+	                            gstat.size,
+	                            &bulk_response);
+	if (result)
+		goto cleanup;
 
 	/* Now wait for the given about of time or the file staged. */
 	// Assume it is purged
 	*Residency = STAGE_FILE_ARCHIVED;
 	do
 	{
-		request = ds3_init_get_available_chunks(ds3_str_value(bulk_response->job_id));
-		error   = ds3_get_available_chunks(Client, request, &chunk_response);
-		ds3_free_request(request);
-		if (error)
+		result = gds3_available_chunks(Client,
+		                               bulk_response->job_id,
+		                               &chunk_response);
+		if (result)
 			goto cleanup;
 
-		// XXX fix check for multiple chunk files
-		if (chunk_response->object_list->list_size != 0)
-			*Residency = STAGE_FILE_RESIDENT;
+		if (chunk_response->object_list)
+		{
+			/* See if we can map the entire length of the file to available chunks. */
+			for (offset = 0; offset != gstat.size; )
+			{
+				for (i = 0; i < chunk_response->object_list->list_size; i++)
+				{
+					assert(chunk_response->object_list->list[i]->size == 1);
+					if (chunk_response->object_list->list[i]->list[0].offset == offset)
+					{
+						offset += chunk_response->object_list->list[i]->list[0].length;
+						break;
+					}
+				}
+
+				if (i == chunk_response->object_list->list_size)
+					break;
+			}
+
+			if (offset == gstat.size)
+				*Residency = STAGE_FILE_RESIDENT;
+		}
 
 		ds3_free_available_chunks_response(chunk_response);
 		if (*Residency == STAGE_FILE_RESIDENT)
@@ -160,17 +182,13 @@ stage_file(ds3_client           * Client,
 		select(0, NULL, NULL, NULL, &tv);
 	} while ((time(NULL) - start_time) < Timeout);
 
-	request = ds3_init_delete_job(ds3_str_value(bulk_response->job_id));
-	error   = ds3_delete_job(Client, request);
 
 cleanup:
-	if (error)
-		result = error_translate(error);
+	if (bulk_response)
+		gds3_delete_job(Client, bulk_response->job_id);
 
 	ds3_free_bulk_object_list(object_list);
 	ds3_free_bulk_response(bulk_response);
-	ds3_free_request(request);
-	ds3_free_error(error);
 	stat_destroy_array(&gstat, 1);
 	if (bucket_name)
 		free(bucket_name);
