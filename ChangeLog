@@ -1,5 +1,12 @@
 **** Have not yet cut a release ****
 
+Sat Oct 31 19:22:05 UTC 2015
+ - Checksums of single-chunk files returns etag
+ - Multi-chunk file checksums are calcualted on the fly
+ - Added checksum progress markers
+ - Added restarts on STOR
+ - Partial RETR does not work
+
 Sat Sep 12 22:51:55 UTC 2015
  - Updated README with known issues
  - Fixed memory bug related to partial stats

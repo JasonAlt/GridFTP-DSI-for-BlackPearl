@@ -13,8 +13,8 @@ Known Issues (Ordered by severity)
 
 3) Checksums can not be used as a sync method.
 
-4) Checksums can not be stored; checksums must always be recomputed which may
-   require a tape mount.
+4) Checksums of single-chunk files uses the etag values. Checksums of
+   multi-chunk files are calculated on the fly.
 
 5) Directory link counts for listings are not calculated because they are slow.
 
