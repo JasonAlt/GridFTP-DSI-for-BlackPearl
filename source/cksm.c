@@ -139,6 +139,55 @@ cksm_thread(void * UserArg)
 	return NULL;
 }
 
+globus_result_t
+_get_object_cksm(ds3_client *  Client,
+                 char       *  BucketName,
+                 char       *  ObjectName,
+                 char       ** Checksum)
+{
+	ds3_get_bucket_response * response = NULL;
+	globus_result_t           result   = GLOBUS_SUCCESS;
+	char                    * marker   = NULL;
+	int                       i        = 0;
+
+	*Checksum = NULL;
+
+	do {
+		result = gds3_get_bucket(Client, 
+		                         BucketName,
+		                         &response,
+		                         "/",        // Delimiter
+		                         ObjectName, // Prefix
+		                         marker,     
+		                         16);        // MaxKeys
+
+		if (!result)
+		{
+			for (i = 0; i < response->num_objects; i++)
+			{
+				if (strcmp(response->objects[i].name->value, ObjectName) == 0)
+				{
+					if (!strchr(response->objects[i].etag->value, '-'))
+						*Checksum = strdup(response->objects[i].etag->value);
+					break;
+				}
+			}
+		}
+
+		if (marker) free(marker);
+		marker = NULL;
+		if (response)
+		{
+			if (response->next_marker)
+				marker = strdup(response->next_marker->value);
+			ds3_free_bucket_response(response);
+			response = NULL;
+		}
+	} while (!result && marker);
+
+	return GLOBUS_SUCCESS;
+}
+
 void
 cksm(globus_gfs_operation_t      Operation,
      globus_gfs_command_info_t * CommandInfo,
@@ -147,6 +196,7 @@ cksm(globus_gfs_operation_t      Operation,
 {
 	globus_result_t result    = GLOBUS_SUCCESS;
 	cksm_info_t   * cksm_info = NULL;
+	char          * checksum  = NULL;
 	char          * bucket    = NULL;
 	char          * object    = NULL;
 	int             rc        = 0;
@@ -170,6 +220,17 @@ cksm(globus_gfs_operation_t      Operation,
 		if (!bucket) free(bucket);
 		result = GlobusGFSErrorGeneric("Can only checksum objects within buckets");
 		Callback(Operation, result, NULL);
+		return;
+	}
+
+	// Shortcut
+	result = _get_object_cksm(Client, bucket, object, &checksum);
+	if (result || checksum)
+	{
+		free(bucket);
+		free(object);
+		Callback(Operation, result, checksum);
+		if (checksum) free(checksum);
 		return;
 	}
 
