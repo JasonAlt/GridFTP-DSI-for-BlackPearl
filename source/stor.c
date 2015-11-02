@@ -74,7 +74,9 @@ stor_gridftp_callout(globus_gfs_operation_t Operation,
 {
 	stor_buffer_t * stor_buffer = UserArg;
 	stor_info_t   * stor_info   = stor_buffer->StorInfo;
-assert(stor_buffer->Buffer == (char *)Buffer);
+
+	// Make sure we have the right buffer / UserArg combo
+	assert(stor_buffer->Buffer == (char *)Buffer);
 
 	pthread_mutex_lock(&stor_info->Mutex);
 	{
@@ -82,9 +84,6 @@ assert(stor_buffer->Buffer == (char *)Buffer);
 		if (Eof) stor_info->Eof = Eof;
 		/* Save any error */
 		if (Result && !stor_info->Result) stor_info->Result = Result;
-
-// XXX BlockSize must be >= (Length*Nmemb) b/c we don't handle partial copies below.
-assert(Length <= stor_info->BlockSize);
 
 		/* Set buffer counters. */
 		stor_buffer->BufferOffset   = 0;
@@ -110,16 +109,122 @@ assert(Length <= stor_info->BlockSize);
 int
 stor_find_buffer(void * Datum, void * Arg)
 {
-	struct ds3_callout * ds3_callout = Arg;
-	ds3_callout->Buffer = Datum;
-
-	if (ds3_callout->NeededOffset == (ds3_callout->Buffer->TransferOffset))
+	if (((stor_buffer_t *)Datum)->TransferOffset == *((uint64_t *)Arg))
 		return 1;
 
-assert(ds3_callout->NeededOffset <  (ds3_callout->Buffer->TransferOffset) ||
-       ds3_callout->NeededOffset >= (ds3_callout->Buffer->TransferOffset + ds3_callout->Buffer->BufferLength));
-
 	return 0;
+}
+
+/* Called locked. */
+uint64_t
+stor_copy_out_buffers(stor_info_t * StorInfo,
+                      void        * Buffer,
+                      uint64_t      Offset,
+                      uint64_t      Length)
+ {
+	globus_list_t * buf_entry      = NULL;
+	stor_buffer_t * stor_buffer    = NULL;
+	uint64_t        offset_needed  = 0;
+	uint64_t        copied_length  = 0;
+	uint64_t        length_to_copy = 0;
+
+	do
+	{
+		offset_needed = Offset + copied_length;
+
+		/* Look for a buffer containing this offset. */
+		buf_entry = globus_list_search_pred(StorInfo->ReadyBufferList,
+		                                    stor_find_buffer,
+		                                    &offset_needed);
+
+		if (buf_entry)
+		{
+			stor_buffer = globus_list_first(buf_entry);
+
+			/* Set length to copy to size of our GridFTP buffer. */
+			length_to_copy = stor_buffer->BufferLength;
+
+			/* Limit to length that DS3 is asking for. */
+			if (length_to_copy > Length)
+				length_to_copy = Length;
+
+			memcpy(Buffer + copied_length,
+			       stor_buffer->Buffer + stor_buffer->BufferOffset, 
+			       length_to_copy);
+
+			/* Update buffer counters. */
+			stor_buffer->BufferOffset   += length_to_copy;
+			stor_buffer->TransferOffset += length_to_copy;
+			stor_buffer->BufferLength   -= length_to_copy;
+			copied_length               += length_to_copy;
+
+			/* If empty, move it to free. */
+			if (stor_buffer->BufferLength == 0)
+			{
+				globus_list_remove(&StorInfo->ReadyBufferList, buf_entry);
+				globus_list_insert(&StorInfo->FreeBufferList,  stor_buffer);
+			}
+		}
+	} while (copied_length != Length && buf_entry);
+
+	return copied_length;
+}
+
+/* Called locked. */
+globus_result_t
+stor_launch_gridftp_reads(stor_info_t * StorInfo)
+{
+	stor_buffer_t * stor_buffer = NULL;
+	globus_result_t result      = GLOBUS_SUCCESS;
+
+	GlobusGFSName(stor_launch_gridftp_reads);
+
+	if (StorInfo->ConnChkCnt++ == 0)
+		globus_gridftp_server_get_optimal_concurrency(StorInfo->Operation,
+		                                             &StorInfo->OptConnCnt);
+	if (StorInfo->ConnChkCnt >= 100) StorInfo->ConnChkCnt = 0;
+
+	while (StorInfo->CurConnCnt < StorInfo->OptConnCnt)
+	{
+		if (!globus_list_empty(StorInfo->FreeBufferList))
+		{
+			/* Grab a buffer from the free list. */
+			stor_buffer = globus_list_remove(&StorInfo->FreeBufferList,
+			                                  StorInfo->FreeBufferList);
+		} else
+		{
+			/* Allocate a new buffer. */
+			stor_buffer = globus_malloc(sizeof(stor_buffer_t));
+			if (!stor_buffer)
+			{
+				result = GlobusGFSErrorMemory("stor_buffer_t");
+				break;
+			}
+			stor_buffer->Buffer = globus_malloc(StorInfo->BlockSize);
+			if (!stor_buffer->Buffer)
+			{
+				free(stor_buffer);
+				result = GlobusGFSErrorMemory("stor_buffer_t");
+				break;
+			}
+			stor_buffer->StorInfo = StorInfo;
+			globus_list_insert(&StorInfo->AllBufferList, stor_buffer);
+		}
+
+		result = globus_gridftp_server_register_read(StorInfo->Operation,
+		                                            (globus_byte_t *)stor_buffer->Buffer,
+		                                             StorInfo->BlockSize,
+		                                             stor_gridftp_callout,
+		                                             stor_buffer);
+
+		if (result)
+			break;
+
+		/* Increase the current connection count. */
+ 		StorInfo->CurConnCnt++;
+	}
+
+	return result;
 }
 
 size_t
@@ -128,138 +233,51 @@ stor_ds3_callout(void * Buffer,
                  size_t Nmemb,
                  void * UserArg)
 {
-	int             rc          = 0;
-	stor_info_t   * stor_info   = UserArg;
-	globus_result_t result      = GLOBUS_SUCCESS;
-	globus_list_t * buf_entry   = NULL;
-	stor_buffer_t * stor_buffer = NULL;
+	uint64_t        copied_length = 0;
+	stor_info_t   * stor_info     = UserArg;
+	globus_result_t result        = GLOBUS_SUCCESS;
 
 	GlobusGFSName(stor_ds3_callout);
 
 	pthread_mutex_lock(&stor_info->Mutex);
 	{
-// XXX BlockSize must be >= (Length*Nmemb) b/c we don't handle partial copies below.
-assert((Length*Nmemb) <= stor_info->BlockSize);
-
-		if (stor_info->Result)
+		while (!result && copied_length != Length*Nmemb && !stor_info->Result)
 		{
-			result = stor_info->Result;
-			goto cleanup;
-		}
+			copied_length += stor_copy_out_buffers(stor_info,
+			                                       Buffer + copied_length, 
+			                                       stor_info->Offset + copied_length,
+			                                       Length*Nmemb - copied_length);
 
-		/* Until we find a buffer with this offset... */
-		while (1)
-		{
-			/*
-			 * Look for a buffer containing this offset.
-			 */
-			stor_info->Ds3Callout.NeededOffset = stor_info->Offset;
-			buf_entry = globus_list_search_pred(stor_info->ReadyBufferList,
-			                                    stor_find_buffer,
-			                                   &stor_info->Ds3Callout);
-			if (buf_entry)
-			{
-				/* Copy out. */
-				int copy_length = stor_info->Ds3Callout.Buffer->BufferLength;
-				if (copy_length > (Length*Nmemb))
-					copy_length = (Length*Nmemb);
-
-				memcpy(Buffer,
-				       stor_info->Ds3Callout.Buffer->Buffer + stor_info->Ds3Callout.Buffer->BufferOffset,
-				       copy_length);
-
-				markers_update_perf_markers(stor_info->Operation, stor_info->Offset, copy_length);
-
-				/* Update buffer counters. */
-				stor_info->Ds3Callout.Buffer->BufferOffset   += copy_length;
-				stor_info->Ds3Callout.Buffer->TransferOffset += copy_length;
-				stor_info->Ds3Callout.Buffer->BufferLength   -= copy_length;
-				rc = copy_length;
-
-				/* Update our sanity-check counter */
-				stor_info->Offset += copy_length;
-
-				/* If empty, move it to free. */
-				if (stor_info->Ds3Callout.Buffer->BufferLength == 0)
-				{
-					globus_list_remove(&stor_info->ReadyBufferList, buf_entry);
-					globus_list_insert(&stor_info->FreeBufferList,  stor_info->Ds3Callout.Buffer);
-				}
-				goto cleanup;
-			}
-
-			/* If we have an EOF then something has gone wrong. */
 			if (stor_info->Eof)
 			{
-				result = GlobusGFSErrorGeneric("Premature end of data transfer");
-				goto cleanup;
+				if (copied_length != Length*Nmemb)
+					result = GlobusGFSErrorGeneric("Premature end of data transfer");
+				break;
 			}
 
-			/*
-			 * Check for the optimal number of concurrent writes.
-			 */
-			if (stor_info->ConnChkCnt++ == 0)
-				globus_gridftp_server_get_optimal_concurrency(stor_info->Operation,
-				                                             &stor_info->OptConnCnt);
-			if (stor_info->ConnChkCnt >= 100) stor_info->ConnChkCnt = 0;
+			result = stor_launch_gridftp_reads(stor_info);
 
-			while (stor_info->CurConnCnt < stor_info->OptConnCnt)
-			{
-				if (!globus_list_empty(stor_info->FreeBufferList))
-				{
-					/* Grab a buffer from the free list. */
-					stor_buffer = globus_list_first(stor_info->FreeBufferList);
-					globus_list_remove(&stor_info->FreeBufferList, stor_info->FreeBufferList);
-				} else
-				{
-					/* Allocate a new buffer. */
-					stor_buffer = globus_malloc(sizeof(stor_buffer_t));
-					if (!stor_buffer)
-					{
-						result = GlobusGFSErrorMemory("stor_buffer_t");
-						goto cleanup;
-					}
-					stor_buffer->Buffer = globus_malloc(stor_info->BlockSize);
-					if (!stor_buffer->Buffer)
-					{
-						free(stor_buffer);
-						result = GlobusGFSErrorMemory("stor_buffer_t");
-						goto cleanup;
-					}
-					globus_list_insert(&stor_info->AllBufferList,  stor_buffer);
-					stor_buffer->StorInfo = stor_info;
-				}
-
-				result = globus_gridftp_server_register_read(stor_info->Operation,
-				                                             (globus_byte_t *)stor_buffer->Buffer,
-				                                              stor_info->BlockSize,
-				                                              stor_gridftp_callout,
-				                                              stor_buffer);
-
-				if (result)
-					goto cleanup;
-
-				/* Increase the current connection count. */
- 				stor_info->CurConnCnt++;
-            }
-
-			pthread_cond_wait(&stor_info->Cond, &stor_info->Mutex);
-			result = stor_info->Result;
-			if (result) goto cleanup;
+			if (!result && copied_length != Length*Nmemb)
+				pthread_cond_wait(&stor_info->Cond, &stor_info->Mutex);
 		}
 
+		if (copied_length)
+			markers_update_perf_markers(stor_info->Operation,
+			                            stor_info->Offset, 
+			                            copied_length);
 
-cleanup:
-		if (result)
-		{
-			if (!stor_info->Result) stor_info->Result = result;
-			rc = 1; /* Signal to shutdown. */
-		}
+		stor_info->Offset += copied_length;
+
+		if (!stor_info->Result)
+			stor_info->Result = result;
+		if (stor_info->Result)
+			copied_length = -1;
 	}
 	pthread_mutex_unlock(&stor_info->Mutex);
 
-	return rc;
+	return copied_length;
 }
+
 
 void
 stor_wait_for_gridftp(stor_info_t * StorInfo)
@@ -268,9 +286,10 @@ stor_wait_for_gridftp(stor_info_t * StorInfo)
 	{
 		while (1)
 		{
-			if (StorInfo->Result) break;
+//			if (StorInfo->Result) break;
 
-			if (globus_list_size(StorInfo->AllBufferList) == globus_list_size(StorInfo->FreeBufferList))
+//			if (globus_list_size(StorInfo->AllBufferList) == globus_list_size(StorInfo->FreeBufferList))
+			if (StorInfo->CurConnCnt == 0)
 				break;
 
 			pthread_cond_wait(&StorInfo->Cond, &StorInfo->Mutex);
@@ -367,8 +386,6 @@ stor_thread(void * UserArg)
 	if (!length)
 		goto cleanup;
 
-	assert(length == -1);
-
 	result = _find_bulk_response(stor_info->Client,
 	                             stor_info->Bucket,
 	                             stor_info->Object,
@@ -416,7 +433,7 @@ stor_thread(void * UserArg)
 
 		if (chunk_response->retry_after)
 		{
-			result = GlobusGFSErrorGeneric("No spaceon device for incoming file.");
+			result = GlobusGFSErrorGeneric("No space on device for incoming file.");
 			goto cleanup;
 		}
 		assert(chunk_response->objects->size == 1);
@@ -443,10 +460,11 @@ stor_thread(void * UserArg)
 		chunk_response = NULL;
 	}
 
-	stor_wait_for_gridftp(stor_info);
-	result = stor_info->Result;
-
 cleanup:
+	stor_wait_for_gridftp(stor_info);
+
+	if (!result)
+		result = stor_info->Result;
 	globus_gridftp_server_finished_transfer(stor_info->Operation, result);
 	ds3_free_get_jobs_response(get_jobs_response);
 	ds3_free_bulk_response(bulk_response);
@@ -479,6 +497,9 @@ stor(ds3_client                 * Client,
 		globus_gridftp_server_finished_transfer(Operation, result);
 		return;
 	}
+
+	if (TransferInfo->truncate)
+		gds3_delete_object(Client, bucket, object);
 
 	stor_info = malloc(sizeof(stor_info_t));
 	if (!stor_info)

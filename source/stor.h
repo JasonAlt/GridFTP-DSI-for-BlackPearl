@@ -91,11 +91,6 @@ typedef struct stor_info {
 	globus_list_t * ReadyBufferList;
 	globus_list_t * FreeBufferList;
 
-	struct ds3_callout {
-		stor_buffer_t * Buffer;
-		globus_off_t    NeededOffset;
-	} Ds3Callout;
-
 } stor_info_t;
 
 void
