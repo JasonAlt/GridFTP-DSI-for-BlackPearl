@@ -83,6 +83,7 @@ error_translate(ds3_error * Error)
 		//return GlobusGFSErrorGeneric(ds3_str_value(Error->error->status_message));
 		return GlobusGFSErrorGeneric(ds3_str_value(Error->error->error_body));
 	case DS3_ERROR_TOO_MANY_REDIRECTS:
+		return GlobusGFSErrorGeneric(Error->message->value);
 	case DS3_ERROR_INVALID_XML:
 	case DS3_ERROR_CURL_HANDLE:
 	case DS3_ERROR_REQUEST_FAILED:
