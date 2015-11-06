@@ -250,7 +250,7 @@ stor_ds3_callout(void * Buffer,
 
 			if (stor_info->Eof)
 			{
-				if (copied_length != Length*Nmemb)
+				if (copied_length != Length*Nmemb && (copied_length + stor_info->Offset) != stor_info->TransferInfo->alloc_size)
 					result = GlobusGFSErrorGeneric("Premature end of data transfer");
 				break;
 			}
