@@ -73,11 +73,19 @@ error_translate(ds3_error * Error)
 	case DS3_ERROR_CURL_HANDLE:
 	case DS3_ERROR_REQUEST_FAILED:
 	case DS3_ERROR_MISSING_ARGS:
+		msg = globus_common_create_string("A DS3 error has occurred. "
+		                                  "Code: %d "
+		                                  "Message: %s "
+		                                  "Error Status Code: %s "
+		                                  "Error Status Message: %s "
+		                                  "Error Body: %s ",
 
-		msg = globus_common_create_string("A DS3 error has occurred. Status: %s ErrorBody: %s MsgValue: %s",
-		           ((Error->error && Error->error->status_message) ? Error->error->status_message->value : "Empty"),
-		           ((Error->error && Error->error->error_body) ? Error->error->error_body->value : "Empty"),
-		           ((Error->error && Error->message) ? Error->message->value : "Empty"));
+		                                  Error->code,
+		                                  ((Error->message && Error->message->value) ? Error->message->value : "Empty"),
+		                                  ((Error->error) ? Error->error->status_code : 0),
+		                                  ((Error->error && Error->error->status_message) ? Error->error->status_message->value : "Empty"),
+		                                  ((Error->error && Error->error->error_body) ? Error->error->error_body->value : "Empty"));
+
 		result = globus_error_put(globus_error_construct_error(GLOBUS_NULL,
 		                                                       GLOBUS_NULL,
 		                                                       GLOBUS_GFS_ERROR_GENERIC,
