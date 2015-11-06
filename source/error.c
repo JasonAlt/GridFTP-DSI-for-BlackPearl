@@ -52,27 +52,12 @@
  */
 #include <ds3.h>
 
-/*
-typedef struct {
-    uint64_t  status_code;
-    ds3_str*  status_message;
-    ds3_str*  error_body;
-}ds3_error_response;
-
-typedef struct {
-    ds3_error_code      code;
-    ds3_str*            message;
-    ds3_error_response* error;
-}ds3_error;
-
-typedef enum {
-  DS3_ERROR_INVALID_XML, DS3_ERROR_CURL_HANDLE, DS3_ERROR_REQUEST_FAILED, DS3_ERROR_MISSING_ARGS, DS3_ERROR_BAD_STATUS_CODE
-}ds3_error_code;
-*/
-
 globus_result_t
 error_translate(ds3_error * Error)
 {
+	char * msg = NULL;
+	globus_result_t result = GLOBUS_SUCCESS;
+
 	GlobusGFSName(error_translate);
 
 	if (!Error) return GLOBUS_SUCCESS;
@@ -88,7 +73,22 @@ error_translate(ds3_error * Error)
 	case DS3_ERROR_CURL_HANDLE:
 	case DS3_ERROR_REQUEST_FAILED:
 	case DS3_ERROR_MISSING_ARGS:
-		break;
+
+		msg = globus_common_create_string("A DS3 error has occurred. Status: %s ErrorBody: %s MsgValue: %s",
+		           ((Error->error && Error->error->status_message) ? Error->error->status_message->value : "Empty"),
+		           ((Error->error && Error->error->error_body) ? Error->error->error_body->value : "Empty"),
+		           ((Error->error && Error->message) ? Error->message->value : "Empty"));
+		result = globus_error_put(globus_error_construct_error(GLOBUS_NULL,
+		                                                       GLOBUS_NULL,
+		                                                       GLOBUS_GFS_ERROR_GENERIC,
+		                                                       __FILE__, 
+		                                                       _gfs_name,
+		                                                       __LINE__,
+		                                                       "%s", 
+		                                                       msg));
+		globus_free(msg);
+
+		return result;
 	}
 	return GlobusGFSErrorGeneric("An unknown DS3 error has occurred");
 }
