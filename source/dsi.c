@@ -182,16 +182,9 @@ dsi_send(globus_gfs_operation_t       Operation,
 
 	GlobusGFSName(dsi_send);
 
-	if (dsi_partial_transfer(TransferInfo))
+	if (dsi_partial_transfer(TransferInfo) || dsi_restart_transfer(TransferInfo))
 	{
-		result = GlobusGFSErrorGeneric("Partial RETR is not supported");
-		globus_gridftp_server_finished_transfer(Operation, result);
-		return;
-	}
-
-	if (dsi_restart_transfer(TransferInfo))
-	{
-		result = GlobusGFSErrorGeneric("Restarts are not supported");
+		result = GlobusGFSErrorGeneric("Non-zero offsets are not supported");
 		globus_gridftp_server_finished_transfer(Operation, result);
 		return;
 	}
