@@ -39,7 +39,8 @@
 # DEALINGS WITH THE SOFTWARE.
 ############################################################################
 
+ACLOCAL_AMFLAGS=-I m4
+
 # SUBDIRS is an automake macro which contains
 # the list of subdirectories that have Makefile.am's
 SUBDIRS=source
-
