@@ -85,6 +85,9 @@ stor_gridftp_callout(globus_gfs_operation_t Operation,
 		/* Save any error */
 		if (Result && !stor_info->Result) stor_info->Result = Result;
 
+//		// Make sure things are coming in in order
+//		if (!stor_info->Result && Length != 0 && Offset != stor_info->GridFTPOffset)
+
 		/* Set buffer counters. */
 		stor_buffer->BufferOffset   = 0;
 		stor_buffer->TransferOffset = Offset;
@@ -98,6 +101,9 @@ stor_gridftp_callout(globus_gfs_operation_t Operation,
 
 		/* Decrease the current connection count. */
 		stor_info->CurConnCnt--;
+
+//		// Move our offset forward
+//		stor_info->GridFTPOffset += Length;
 
 		/* Wake the DS3 thread */
 		pthread_cond_signal(&stor_info->Cond);
@@ -184,6 +190,7 @@ stor_launch_gridftp_reads(stor_info_t * StorInfo)
 		                                             &StorInfo->OptConnCnt);
 	if (StorInfo->ConnChkCnt >= 100) StorInfo->ConnChkCnt = 0;
 
+	// This code assumes the buffers are coming in in order.
 	while (StorInfo->CurConnCnt < StorInfo->OptConnCnt)
 	{
 		if (!globus_list_empty(StorInfo->FreeBufferList))
@@ -191,6 +198,9 @@ stor_launch_gridftp_reads(stor_info_t * StorInfo)
 			/* Grab a buffer from the free list. */
 			stor_buffer = globus_list_remove(&StorInfo->FreeBufferList,
 			                                  StorInfo->FreeBufferList);
+		} else if (globus_list_size(StorInfo->AllBufferList) >= StorInfo->OptConnCnt)
+		{
+			break;
 		} else
 		{
 			/* Allocate a new buffer. */
@@ -227,6 +237,22 @@ stor_launch_gridftp_reads(stor_info_t * StorInfo)
 	return result;
 }
 
+globus_result_t
+stor_check_for_parallel_conns(stor_info_t * StorInfo, uint64_t Offset)
+{
+	GlobusGFSName(stor_check_for_parallel_conns);
+	if (globus_list_size(StorInfo->ReadyBufferList) > 0)
+	{
+		if (globus_list_search_pred(StorInfo->ReadyBufferList,
+		                            stor_find_buffer,
+		                            &Offset) == NULL)
+		{
+			return GlobusGFSErrorGeneric("Out of order buffer offsets detected. Please disable parallel data channels.");
+		}
+	}
+	return GLOBUS_SUCCESS;
+}
+
 size_t
 stor_ds3_callout(void * Buffer,
                  size_t Length,
@@ -245,17 +271,21 @@ stor_ds3_callout(void * Buffer,
 		{
 			copied_length += stor_copy_out_buffers(stor_info,
 			                                       Buffer + copied_length, 
-			                                       stor_info->Offset + copied_length,
+			                                       stor_info->DS3Offset + copied_length,
 			                                       Length*Nmemb - copied_length);
 
 			if (stor_info->Eof)
 			{
-				if (copied_length != Length*Nmemb && (copied_length + stor_info->Offset) != stor_info->TransferInfo->alloc_size)
+				if (copied_length != Length*Nmemb && (copied_length + stor_info->DS3Offset) != stor_info->TransferInfo->alloc_size)
 					result = GlobusGFSErrorGeneric("Premature end of data transfer");
 				break;
 			}
 
-			result = stor_launch_gridftp_reads(stor_info);
+			result = stor_check_for_parallel_conns(stor_info,
+			                                       stor_info->DS3Offset + copied_length);
+
+			if (!result)
+				result = stor_launch_gridftp_reads(stor_info);
 
 			if (!result && copied_length != Length*Nmemb)
 				pthread_cond_wait(&stor_info->Cond, &stor_info->Mutex);
@@ -263,10 +293,10 @@ stor_ds3_callout(void * Buffer,
 
 		if (copied_length)
 			markers_update_perf_markers(stor_info->Operation,
-			                            stor_info->Offset, 
+			                            stor_info->DS3Offset, 
 			                            copied_length);
 
-		stor_info->Offset += copied_length;
+		stor_info->DS3Offset += copied_length;
 
 		if (!stor_info->Result)
 			stor_info->Result = result;
@@ -439,7 +469,7 @@ stor_thread(void * UserArg)
 		assert(chunk_response->objects->size == 1);
 
 		// So the callback knows our current offset.
-		stor_info->Offset = bulk_response->list[i]->list[0].offset;
+		stor_info->DS3Offset = bulk_response->list[i]->list[0].offset;
 
 		result = gds3_put_object_for_job(stor_info->Client,
 		                                 stor_info->Bucket,
@@ -449,6 +479,10 @@ stor_thread(void * UserArg)
 		                                 bulk_response->job_id->value,
 		                                 stor_ds3_callout,
 		                                 stor_info);
+
+		// Let our internal error override a generic DS3 eror
+		if (stor_info->Result)
+			result = stor_info->Result;
 		if (result)
 			goto cleanup;
 

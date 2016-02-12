@@ -1,5 +1,8 @@
 **** Have not yet cut a release ****
 
+Fri Feb 12 02:30:47 UTC 2016
+ - Fix for OOM on STOR when there is a speed mismatch
+
 Sat Oct 31 19:22:05 UTC 2015
  - Checksums of single-chunk files returns etag
  - Multi-chunk file checksums are calcualted on the fly

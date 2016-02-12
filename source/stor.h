@@ -80,7 +80,7 @@ typedef struct stor_info {
 	pthread_mutex_t              Mutex;
 	pthread_cond_t               Cond;
 
-	uint64_t                     Offset; // Sanity check only
+	uint64_t                     DS3Offset;
 	globus_bool_t                Eof;
 
 	int OptConnCnt;
