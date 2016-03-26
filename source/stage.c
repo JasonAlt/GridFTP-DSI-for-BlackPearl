@@ -97,11 +97,11 @@ stage_get_timeout(globus_gfs_operation_t      Operation,
 }
 
 globus_result_t
-_stage_request_exists(ds3_client        *  Client,
-                      char              *  BucketName,
-                      char              *  ObjectName,
-                      globus_gfs_stat_t *  Gstat,
-                      ds3_str           ** JobID)
+_find_stage_request(ds3_client        *  Client,
+                    char              *  BucketName,
+                    char              *  ObjectName,
+                    globus_gfs_stat_t *  Gstat,
+                    ds3_bulk_response ** GetJobResponse)
 {
 	int                     i                 = 0;
 	int                     j                 = 0;
@@ -110,14 +110,14 @@ _stage_request_exists(ds3_client        *  Client,
 	ds3_bulk_response     * bulk_response     = NULL;
 	ds3_get_jobs_response * get_jobs_response = NULL;
 
-	*JobID = NULL;
+	*GetJobResponse = NULL;
 
 	result = gds3_get_jobs(Client, &get_jobs_response);
 	if (result)
 		return result;
 
 	/* For each job .... */
-	for (i = 0; !*JobID && get_jobs_response && i < get_jobs_response->jobs_size; i++)
+	for (i = 0; get_jobs_response && i < get_jobs_response->jobs_size; i++)
 	{
 		/* Must be in this bucket. */
 		if (strcmp(get_jobs_response->jobs[i]->bucket_name->value, BucketName))
@@ -141,7 +141,7 @@ _stage_request_exists(ds3_client        *  Client,
 		if (bulk_response)
 		{
 			/* For each chunk ... */
-			for (j = 0; !*JobID && j < bulk_response->list_size; j++)
+			for (j = 0; !*GetJobResponse && j < bulk_response->list_size; j++)
 			{
 				/* For each portion of this chunk ... */
 				for (k = 0; k < bulk_response->list_size; k++)
@@ -149,17 +149,18 @@ _stage_request_exists(ds3_client        *  Client,
 					/* Does the name match? */
 					if (strcmp(bulk_response->list[j]->list[k].name->value, ObjectName) == 0)
 					{
-						*JobID = ds3_str_dup(get_jobs_response->jobs[i]->job_id);
-						break;
+						*GetJobResponse = bulk_response;
+						goto cleanup;
 					}
 				}
 			}
-			ds3_free_bulk_response(bulk_response);
 		}
+		ds3_free_bulk_response(bulk_response);
+		bulk_response = NULL;
 	}
 
-	if (get_jobs_response)
-		ds3_free_get_jobs_response(get_jobs_response);
+cleanup:
+	ds3_free_get_jobs_response(get_jobs_response);
 
 	return result;
 }
@@ -175,18 +176,16 @@ stage_file(ds3_client           * Client,
            int                    Timeout, 
            stage_file_residency * Residency)
 {
-	char                              * bucket_name    = NULL;
-	char                              * object_name    = NULL;
-	globus_result_t                     result         = GLOBUS_SUCCESS;
-	ds3_bulk_response                 * bulk_response  = NULL;
-	ds3_get_available_chunks_response * chunk_response = NULL;
-	ds3_bulk_object_list              * object_list    = NULL;
+	char                              * bucket_name       = NULL;
+	char                              * object_name       = NULL;
+	globus_result_t                     result            = GLOBUS_SUCCESS;
+	ds3_bulk_response                 * bulk_response     = NULL;
+	ds3_bulk_response                 * bulk_get_response = NULL;
+	ds3_bulk_response                 * get_job_response  = NULL;
 	globus_gfs_stat_t                   gstat;
-	uint64_t                            offset         = 0;
-	time_t                              start_time     = time(NULL);
-	ds3_str                           * job_id         = NULL;
-	int                                 i              = 0;
-
+	time_t                              start_time        = time(NULL);
+	int                                 i                 = 0;
+ 
 	GlobusGFSName(stage_file);
 
 	// Assume it is resident
@@ -202,57 +201,52 @@ stage_file(ds3_client           * Client,
 
 	path_split(Pathname, &bucket_name, &object_name);
 
-	result = _stage_request_exists(Client, bucket_name, object_name, &gstat, &job_id);
-	if (result)
-		goto cleanup;
-
-	if (!job_id)
-	{
-		result = gds3_init_bulk_get(Client,
-		                            bucket_name,
-		                            object_name,
-		                            0,
-		                            gstat.size,
-		                            &bulk_response);
-		if (result)
-			goto cleanup;
-
-		job_id = ds3_str_dup(bulk_response->job_id);
-	}
-
-	/* Now wait for the given about of time or the file staged. */
-	// Assume it is purged
 	*Residency = STAGE_FILE_ARCHIVED;
 	do
 	{
-		result = gds3_available_chunks(Client, job_id, &chunk_response);
+		/*
+		 * Try to lookup the stage request through the job interface.
+		 */
+		result = _find_stage_request(Client, bucket_name, object_name, &gstat, &get_job_response);
 		if (result)
 			goto cleanup;
+		bulk_response = get_job_response;
 
-		if (chunk_response->object_list)
+		/*
+		 * If we didn't find the stage request.
+		 */
+		if (!bulk_response)
 		{
-			/* See if we can map the entire length of the file to available chunks. */
-			for (offset = 0; offset != gstat.size; )
-			{
-				for (i = 0; i < chunk_response->object_list->list_size; i++)
-				{
-					assert(chunk_response->object_list->list[i]->size == 1);
-					if (chunk_response->object_list->list[i]->list[0].offset == offset)
-					{
-						offset += chunk_response->object_list->list[i]->list[0].length;
-						break;
-					}
-				}
+			/* Create the stage request. */
+			result = gds3_init_bulk_get(Client,
+			                            bucket_name,
+			                            object_name,
+			                            0,
+			                            gstat.size,
+			                            &bulk_get_response);
+			if (result)
+				goto cleanup;
 
-				if (i == chunk_response->object_list->list_size)
-					break;
-			}
-
-			if (offset == gstat.size)
-				*Residency = STAGE_FILE_RESIDENT;
+			bulk_response = bulk_get_response;
 		}
 
-		ds3_free_available_chunks_response(chunk_response);
+		*Residency = STAGE_FILE_RESIDENT;
+		for (i = 0; i < bulk_response->list_size; i++)
+		{
+			assert(bulk_response->list[i]->size == 1);
+
+			if (bulk_response->list[i]->list[0].in_cache == False)
+			{
+				*Residency = STAGE_FILE_ARCHIVED;
+				break;
+			}
+		}
+
+		ds3_free_bulk_response(get_job_response);
+		ds3_free_bulk_response(bulk_get_response);
+		get_job_response  = NULL;
+		bulk_get_response = NULL;
+
 		if (*Residency == STAGE_FILE_RESIDENT)
 			break;
 
@@ -265,9 +259,8 @@ stage_file(ds3_client           * Client,
 
 cleanup:
 
-	ds3_str_free(job_id);
-	ds3_free_bulk_object_list(object_list);
-	ds3_free_bulk_response(bulk_response);
+	ds3_free_bulk_response(get_job_response);
+	ds3_free_bulk_response(bulk_get_response);
 	stat_destroy_array(&gstat, 1);
 	if (bucket_name)
 		free(bucket_name);

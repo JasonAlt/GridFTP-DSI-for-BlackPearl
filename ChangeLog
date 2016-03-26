@@ -1,5 +1,9 @@
 **** Have not yet cut a release ****
 
+Sat Mar 26 22:00:55 UTC 2016
+ - Fix for dececting when files are resident in the disk cache
+ - DS3 is returning chunks out-of-order, may cause corruption in STREAM mode
+
 Fri Feb 12 02:30:47 UTC 2016
  - Fix for OOM on STOR when there is a speed mismatch
 
