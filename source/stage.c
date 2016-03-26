@@ -97,6 +97,79 @@ stage_get_timeout(globus_gfs_operation_t      Operation,
 }
 
 globus_result_t
+_stage_request_exists(ds3_client        *  Client,
+                      char              *  BucketName,
+                      char              *  ObjectName,
+                      globus_gfs_stat_t *  Gstat,
+                      ds3_str           ** JobID)
+{
+	int                     i                 = 0;
+	int                     j                 = 0;
+	int                     k                 = 0;
+	globus_result_t         result            = GLOBUS_SUCCESS;
+	ds3_bulk_response     * bulk_response     = NULL;
+	ds3_get_jobs_response * get_jobs_response = NULL;
+
+	*JobID = NULL;
+
+	result = gds3_get_jobs(Client, &get_jobs_response);
+	if (result)
+		return result;
+
+	/* For each job .... */
+	for (i = 0; !*JobID && get_jobs_response && i < get_jobs_response->jobs_size; i++)
+	{
+		/* Must be in this bucket. */
+		if (strcmp(get_jobs_response->jobs[i]->bucket_name->value, BucketName))
+			continue;
+
+		/* The request must be for the entire file. */
+		if (get_jobs_response->jobs[i]->original_size_in_bytes != Gstat->size)
+			continue;
+
+		/* The request must be a retrieve. */
+		if (get_jobs_response->jobs[i]->request_type != GET)
+			continue;
+
+		/* Get this job's detailed information. */
+		result = gds3_get_job(Client,
+		                      get_jobs_response->jobs[i]->job_id->value,
+		                      &bulk_response);
+		if (result)
+			break;
+
+		if (bulk_response)
+		{
+			/* For each chunk ... */
+			for (j = 0; !*JobID && j < bulk_response->list_size; j++)
+			{
+				/* For each portion of this chunk ... */
+				for (k = 0; k < bulk_response->list_size; k++)
+				{
+					/* Does the name match? */
+					if (strcmp(bulk_response->list[j]->list[k].name->value, ObjectName) == 0)
+					{
+						*JobID = ds3_str_dup(get_jobs_response->jobs[i]->job_id);
+						break;
+					}
+				}
+			}
+			ds3_free_bulk_response(bulk_response);
+		}
+	}
+
+	if (get_jobs_response)
+		ds3_free_get_jobs_response(get_jobs_response);
+
+	return result;
+}
+
+/*
+ * ds3_get_available_chunks() apparently can not be trusted to tell you all chunks
+ * that are available. You'll need to rely on ds3_bulk_object from gds3_get_job()
+ * or gds3_init_bulk_get().
+ */
+globus_result_t
 stage_file(ds3_client           * Client,
            char                 * Pathname, 
            int                    Timeout, 
@@ -111,6 +184,7 @@ stage_file(ds3_client           * Client,
 	globus_gfs_stat_t                   gstat;
 	uint64_t                            offset         = 0;
 	time_t                              start_time     = time(NULL);
+	ds3_str                           * job_id         = NULL;
 	int                                 i              = 0;
 
 	GlobusGFSName(stage_file);
@@ -128,23 +202,30 @@ stage_file(ds3_client           * Client,
 
 	path_split(Pathname, &bucket_name, &object_name);
 
-	result = gds3_init_bulk_get(Client,
-	                            bucket_name,
-	                            object_name,
-	                            0,
-	                            gstat.size,
-	                            &bulk_response);
+	result = _stage_request_exists(Client, bucket_name, object_name, &gstat, &job_id);
 	if (result)
 		goto cleanup;
+
+	if (!job_id)
+	{
+		result = gds3_init_bulk_get(Client,
+		                            bucket_name,
+		                            object_name,
+		                            0,
+		                            gstat.size,
+		                            &bulk_response);
+		if (result)
+			goto cleanup;
+
+		job_id = ds3_str_dup(bulk_response->job_id);
+	}
 
 	/* Now wait for the given about of time or the file staged. */
 	// Assume it is purged
 	*Residency = STAGE_FILE_ARCHIVED;
 	do
 	{
-		result = gds3_available_chunks(Client,
-		                               bulk_response->job_id,
-		                               &chunk_response);
+		result = gds3_available_chunks(Client, job_id, &chunk_response);
 		if (result)
 			goto cleanup;
 
@@ -182,11 +263,9 @@ stage_file(ds3_client           * Client,
 		select(0, NULL, NULL, NULL, &tv);
 	} while ((time(NULL) - start_time) < Timeout);
 
-
 cleanup:
-	if (bulk_response)
-		gds3_delete_job(Client, bulk_response->job_id);
 
+	ds3_str_free(job_id);
 	ds3_free_bulk_object_list(object_list);
 	ds3_free_bulk_response(bulk_response);
 	stat_destroy_array(&gstat, 1);
