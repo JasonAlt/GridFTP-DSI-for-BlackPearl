@@ -72,7 +72,9 @@ typedef struct {
 	pthread_mutex_t              Mutex;
 	pthread_cond_t               Cond;
 
-	uint64_t                     Offset;
+	uint64_t                     FileOffset;
+	uint64_t                     TransferOffset;
+	uint64_t                     TransferLength;
 
 	int OptConnCnt;
 	int ConnChkCnt;

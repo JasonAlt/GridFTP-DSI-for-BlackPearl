@@ -147,12 +147,24 @@ retr_ds3_callout(void * ReadyBuffer,
 	int             rc          = Length * Nmemb;
 	int             buf_offset  = 0;
 	int             cpy_length  = 0;
+	int             skip_length = 0;
 
 	GlobusGFSName(retr_ds3_callout);
 
 	pthread_mutex_lock(&retr_info->Mutex);
 	{
-		while (buf_offset != (Length*Nmemb))
+		if (retr_info->FileOffset < retr_info->TransferOffset)
+		{
+			skip_length = retr_info->TransferOffset - retr_info->FileOffset;
+
+			if (skip_length > (Length*Nmemb))
+				skip_length = Length*Nmemb;
+
+			buf_offset            += skip_length;
+			retr_info->FileOffset += skip_length;
+		}
+
+		while (buf_offset != (Length*Nmemb) && retr_info->TransferLength > 0)
 		{
 			result = retr_get_free_buffer(retr_info, &free_buffer);
 			if (result)
@@ -163,6 +175,8 @@ retr_ds3_callout(void * ReadyBuffer,
 			}
 
 			cpy_length = (Length*Nmemb) - buf_offset;
+			if (cpy_length > retr_info->TransferLength)
+				cpy_length = retr_info->TransferLength;
 			if (cpy_length > retr_info->BlockSize)
 				cpy_length = retr_info->BlockSize;
 
@@ -171,7 +185,7 @@ retr_ds3_callout(void * ReadyBuffer,
 			result = globus_gridftp_server_register_write(retr_info->Operation,
 			                                              free_buffer,
 			                                              cpy_length,
-			                                              retr_info->Offset,
+			                                              retr_info->TransferOffset,
 			                                              0,
 			                                              retr_gridftp_callout,
 			                                              retr_info);
@@ -185,11 +199,13 @@ retr_ds3_callout(void * ReadyBuffer,
 
 			/* Update perf markers */
 			markers_update_perf_markers(retr_info->Operation, 
-			                            retr_info->Offset,
+			                            retr_info->TransferOffset,
 			                            cpy_length);
 
-			retr_info->Offset += cpy_length;
-			buf_offset        += cpy_length;
+			retr_info->TransferOffset += cpy_length;
+			retr_info->TransferLength -= cpy_length;
+			retr_info->FileOffset     += cpy_length;
+			buf_offset                += cpy_length;
 		}
 	}
 cleanup:
@@ -231,13 +247,24 @@ retr_destroy_info(retr_info_t * RetrInfo)
 	}
 }
 
+int
+_object_intersects_range(uint64_t Offset, uint64_t Length, ds3_bulk_object * Object)
+{
+	if ((Offset + Length) <= Object->offset)
+		return 0;
+
+	if (Offset >= (Object->offset + Object->length))
+		return 0;
+
+	return 1;
+}
+
 void *
 retr_thread(void * UserArg)
 {
 	int                 i             = 0;
+	int                 j             = 0;
 	int                 last_loop     = 0;
-	globus_off_t        offset        = 0;
-	globus_off_t        length        = 0;
 	globus_result_t     result        = GLOBUS_SUCCESS;
 	retr_info_t       * retr_info     = UserArg;
 	ds3_bulk_response * bulk_response = NULL;
@@ -247,12 +274,12 @@ retr_thread(void * UserArg)
 	while (!last_loop)
 	{
 		globus_gridftp_server_get_write_range(retr_info->Operation,
-		                                      &offset,
-		                                      &length);
-		if (length == 0)
+		                                      &retr_info->TransferOffset,
+		                                      &retr_info->TransferLength);
+		if (retr_info->TransferLength == 0)
 			break;
 
-		if (length == -1)
+		if (retr_info->TransferLength == -1)
 		{
 			globus_gfs_stat_t gfs_stat;
 			result = stat_entry(retr_info->Client,
@@ -261,7 +288,7 @@ retr_thread(void * UserArg)
 			if (result)
 				break;
 
-			length = gfs_stat.size - offset;
+			retr_info->TransferLength = gfs_stat.size - retr_info->TransferOffset;
 		
 			stat_destroy(&gfs_stat);
 			last_loop = 1;
@@ -271,36 +298,47 @@ retr_thread(void * UserArg)
 		result = gds3_init_bulk_get(retr_info->Client,
 		                            retr_info->Bucket,
 		                            retr_info->Object,
-		                            offset,
-		                            length,
+		                            retr_info->TransferOffset,
+		                            retr_info->TransferLength,
 		                            &bulk_response);
 		if (result)
 			break;
 
-		for (i = 0; i < bulk_response->list_size; i++)
+		/* 3.0.0, 3.0.1 had incorrect offset ordering. Not taking chances. */
+		while (retr_info->TransferLength > 0)
 		{
-			assert(bulk_response->list[i]->size == 1);
+			for (i = 0; i < bulk_response->list_size; i++)
+			{
+				for (j = 0; j < bulk_response->list[i]->size; j++)
+				{
+					if(_object_intersects_range(retr_info->TransferOffset,
+					                            retr_info->TransferLength,
+					                            &bulk_response->list[i]->list[j]))
+					{
+						retr_info->FileOffset = bulk_response->list[i]->list[j].offset;
 
-/*
- * XXX bulk_response returns chunks that contain the offsets we need.
- * We must make one request per chunk that includes the ranges within
- * that chunk that we need.
- */
-			retr_info->Offset = bulk_response->list[i]->list[0].offset;
-			result = gds3_get_object_for_job(retr_info->Client,
-			                                 retr_info->Bucket,
-			                                 retr_info->Object,
-			                                 bulk_response->list[i]->list[0].offset,
-			                                 bulk_response->job_id->value,
-			                                 retr_ds3_callout,
-			                                 retr_info);
-			if (result)
-				break;
+						result = gds3_get_object_for_job(retr_info->Client,
+						                                 retr_info->Bucket,
+						                                 retr_info->Object,
+						                                 bulk_response->list[i]->list[j].offset,
+						                                 bulk_response->job_id->value,
+						                                 retr_ds3_callout,
+						                                 retr_info);
+
+						if (result) goto cleanup;
+
+						continue;
+					}
+				}
+			}
 		}
 
 		ds3_free_bulk_response(bulk_response);
 		bulk_response = NULL;
 	}
+cleanup:
+	if (bulk_response)
+		ds3_free_bulk_response(bulk_response);
 
 	globus_gridftp_server_finished_transfer(retr_info->Operation, result);
 	ds3_free_bulk_response(bulk_response);

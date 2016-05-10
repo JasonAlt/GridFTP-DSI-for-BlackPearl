@@ -1,7 +1,11 @@
 **** Have not yet cut a release ****
 
+Tue May 10 21:59:05 UTC 2016
+ - Fix for multi object RETR and CKSM
+ - Safeguard against non-ascending object offset ordering from ds3_init_get_bulk()
+
 Sat Mar 26 22:00:55 UTC 2016
- - Fix for dececting when files are resident in the disk cache
+ - Fix for detecting when files are resident in the disk cache
  - DS3 is returning chunks out-of-order, may cause corruption in STREAM mode
 
 Fri Feb 12 02:30:47 UTC 2016

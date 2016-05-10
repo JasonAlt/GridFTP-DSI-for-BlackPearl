@@ -43,7 +43,6 @@
  * System includes
  */
 #include <sys/select.h>
-#include <assert.h>
 #include <stdlib.h>
 #include <time.h>
 
@@ -185,6 +184,7 @@ stage_file(ds3_client           * Client,
 	globus_gfs_stat_t                   gstat;
 	time_t                              start_time        = time(NULL);
 	int                                 i                 = 0;
+	int                                 j                 = 0;
  
 	GlobusGFSName(stage_file);
 
@@ -231,14 +231,12 @@ stage_file(ds3_client           * Client,
 		}
 
 		*Residency = STAGE_FILE_RESIDENT;
-		for (i = 0; i < bulk_response->list_size; i++)
+		for (i = 0; *Residency == STAGE_FILE_RESIDENT && i < bulk_response->list_size; i++)
 		{
-			assert(bulk_response->list[i]->size == 1);
-
-			if (bulk_response->list[i]->list[0].in_cache == False)
+			for (j = 0; *Residency == STAGE_FILE_RESIDENT && j < bulk_response->list[i]->size; j++)
 			{
-				*Residency = STAGE_FILE_ARCHIVED;
-				break;
+				if (bulk_response->list[i]->list[j].in_cache == False)
+					*Residency = STAGE_FILE_ARCHIVED;
 			}
 		}
 
