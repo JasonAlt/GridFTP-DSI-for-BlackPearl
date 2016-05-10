@@ -1,7 +1,7 @@
 **** Have not yet cut a release ****
 
 Tue May 10 21:59:05 UTC 2016
- - Fix for multi object RETR and CKSM
+ - Fix for multi object RETR and SITE STAGE
  - Safeguard against non-ascending object offset ordering from ds3_init_get_bulk()
 
 Sat Mar 26 22:00:55 UTC 2016
