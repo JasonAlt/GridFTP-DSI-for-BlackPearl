@@ -49,7 +49,20 @@
 # our DSI.
 lib_LTLIBRARIES = libglobus_gridftp_server_blackpearl.la  
 
-SOURCES = dsi.c \
+SOURCES = \
+	      access_id.h \
+	      cksm.h \
+	      commands.h \
+	      config.h \
+	      error.h \
+	      gds3.h \
+	      markers.h \
+	      path.h \
+	      retr.h \
+	      stage.h \
+	      stat.h \
+	      stor.h  \
+	      dsi.c \
 	      config.c \
 	      access_id.c \
 	      stat.c \
@@ -59,14 +72,17 @@ SOURCES = dsi.c \
 	      stor.c \
 	      retr.c \
 	      cksm.c \
-	      dl.c \
 	      markers.c \
 	      stage.c \
 	      error.c
 libglobus_gridftp_server_blackpearl_la_SOURCES=$(SOURCES)
-
-CFLAGS=-Wall -ggdb3 -O0 $(GLOBUS_CPPFLAGS) $(DS3_CPPFLAGS)
-LDFLAGS=$(GLOBUS_LDFLAGS) $(DS3_LDFLAGS)
-
-libglobus_gridftp_server_blackpearl_la_LIBADD=-lglobus_gridftp_server -lds3
-
+libglobus_gridftp_server_blackpearl_la_CPPFLAGS=$(LIBCRYPTO_CFLAGS) $(GLOBUS_CFLAGS) $(LIBDS3_CFLAGS)
+libglobus_gridftp_server_blackpearl_la_LIBADD=\
+	      $(LIBCRYPTO_LIBS) \
+	      $(GLOBUS_LIBS) \
+	      $(LIBDS3_LIBS)
+libglobus_gridftp_server_blackpearl_la_LDFLAGS= \
+	      -no-undefined \
+	      -avoid-version \
+	      -module \
+	      -rpath $(libdir)
