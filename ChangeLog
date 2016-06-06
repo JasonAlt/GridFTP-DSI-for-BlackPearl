@@ -1,5 +1,8 @@
 **** Have not yet cut a release ****
 
+Mon Jun  6 15:11:09 UTC 2016
+ - Fix for determining length of buffer to copy out
+
 Tue May 10 21:59:05 UTC 2016
  - Fix for multi object RETR and SITE STAGE
  - Safeguard against non-ascending object offset ordering from ds3_init_get_bulk()
