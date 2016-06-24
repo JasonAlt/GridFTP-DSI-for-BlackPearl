@@ -341,7 +341,6 @@ cleanup:
 		ds3_free_bulk_response(bulk_response);
 
 	globus_gridftp_server_finished_transfer(retr_info->Operation, result);
-	ds3_free_bulk_response(bulk_response);
 
 	return NULL;
 }

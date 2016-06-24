@@ -1,5 +1,8 @@
 **** Have not yet cut a release ****
 
+Fri Jun 24 21:57:32 UTC 2016
+ - Fixed double free at the end of retr_thread
+
 Mon Jun  6 15:11:09 UTC 2016
  - Fix for determining length of buffer to copy out
 
