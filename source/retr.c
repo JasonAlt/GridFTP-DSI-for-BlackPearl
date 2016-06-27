@@ -248,8 +248,9 @@ retr_destroy_info(retr_info_t * RetrInfo)
 }
 
 int
-_object_intersects_range(uint64_t Offset, uint64_t Length, ds3_bulk_object * Object)
+_object_contains_offset(uint64_t Offset, uint64_t Length, ds3_bulk_object * Object)
 {
+	return Offset >= Object->offset && Offset < (Object->offset + Object->length);
 	if ((Offset + Length) <= Object->offset)
 		return 0;
 
@@ -270,6 +271,8 @@ retr_thread(void * UserArg)
 	ds3_bulk_response * bulk_response = NULL;
 
 	globus_gridftp_server_begin_transfer(retr_info->Operation, 0, NULL);
+
+sleep(10);
 
 	while (!last_loop)
 	{
@@ -311,9 +314,12 @@ retr_thread(void * UserArg)
 			{
 				for (j = 0; j < bulk_response->list[i]->size; j++)
 				{
-					if(_object_intersects_range(retr_info->TransferOffset,
-					                            retr_info->TransferLength,
-					                            &bulk_response->list[i]->list[j]))
+//					if(_object_intersects_range(retr_info->TransferOffset,
+//					                            retr_info->TransferLength,
+//					                            &bulk_response->list[i]->list[j]))
+					if(_object_contains_offset(retr_info->TransferOffset,
+					                           retr_info->TransferLength,
+					                           &bulk_response->list[i]->list[j]))
 					{
 						retr_info->FileOffset = bulk_response->list[i]->list[j].offset;
 
